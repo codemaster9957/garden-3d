@@ -1,0 +1,371 @@
+/* ── Reset & Base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --green-dark:  #1e3a2f;
+  --green-mid:   #2d6a4f;
+  --green-light: #52b788;
+  --brown:       #8b5e3c;
+  --gold:        #ffd700;
+  --cream:       #f5f0e8;
+  --text:        #f5f0e8;
+  --shadow:      rgba(0,0,0,0.45);
+  --ui-bg:       rgba(20, 50, 35, 0.88);
+  --ui-border:   rgba(82, 183, 136, 0.4);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+body {
+  background: #2d5016;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ── Canvas ───────────────────────────────────────────────────────────────── */
+#game-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ── HUD ──────────────────────────────────────────────────────────────────── */
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ── Status Bar ───────────────────────────────────────────────────────────── */
+#status-bar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 20px;
+  padding: 4px 16px;
+  pointer-events: none;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.connected    { color: #52b788; }
+.disconnected { color: #e63946; }
+#player-id    { color: #adb5bd; font-size: 11px; }
+
+/* ── Top Bar ──────────────────────────────────────────────────────────────── */
+#top-bar {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  padding: 8px 18px;
+  pointer-events: auto;
+  white-space: nowrap;
+}
+
+#expand-btn {
+  background: var(--gold);
+  color: #2d1a00;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+#expand-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+#money-panel, #crop-panel {
+  color: var(--cream);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+#sell-btn {
+  background: var(--gold);
+  color: #2d1a00;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.1s, filter 0.1s;
+}
+#sell-btn:hover  { filter: brightness(1.15); }
+#sell-btn:active { transform: scale(0.95); }
+
+/* ── Hotbar ───────────────────────────────────────────────────────────────── */
+#hotbar {
+  position: absolute;
+  bottom: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+  max-width: min(96vw, 1180px);
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.hotbar-btn {
+  background: var(--ui-bg);
+  border: 2px solid var(--ui-border);
+  border-radius: 10px;
+  color: var(--cream);
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.15s, background 0.15s;
+  min-width: 80px;
+  justify-content: center;
+}
+.hotbar-btn:hover  { border-color: var(--green-light); }
+.hotbar-btn.active {
+  border-color: var(--gold);
+  background: rgba(255, 215, 0, 0.18);
+}
+.hotbar-btn.empty  { opacity: 0.45; }
+
+.seed-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.seed-count {
+  font-size: 11px;
+  opacity: 0.75;
+  margin-left: 2px;
+}
+
+/* ── Mode Indicator ───────────────────────────────────────────────────────── */
+#mode-indicator {
+  position: absolute;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 20px;
+  color: var(--cream);
+  font-size: 13px;
+  padding: 4px 14px;
+  pointer-events: none;
+}
+#mode-indicator.harvest { border-color: #e63946; color: #ff6b7a; }
+
+/* ── Hint ─────────────────────────────────────────────────────────────────── */
+#hint,
+#interact-hint {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: rgba(245, 240, 232, 0.85);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ── Shop Panel ───────────────────────────────────────────────────────────── */
+#shop-panel {
+  position: absolute;
+  top: 44px;
+  right: 16px;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  pointer-events: auto;
+  min-width: 180px;
+  color: var(--cream);
+}
+
+#shop-panel h3 {
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: var(--green-light);
+  border-bottom: 1px solid var(--ui-border);
+  padding-bottom: 6px;
+}
+
+#shop-items { display: flex; flex-direction: column; gap: 6px; }
+
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.shop-item span:nth-child(2) { flex: 1; }
+.shop-item .price { color: var(--gold); font-size: 12px; }
+
+.shop-item button {
+  background: var(--green-mid);
+  border: 1px solid var(--green-light);
+  border-radius: 6px;
+  color: var(--cream);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  transition: background 0.15s;
+}
+.shop-item button:hover { background: var(--green-light); color: var(--green-dark); }
+
+/* ── Other Player Labels ──────────────────────────────────────────────────── */
+.player-label {
+  position: fixed;
+  top: 10px;
+  font-size: 12px;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  padding: 3px 10px;
+  color: var(--cream);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+/* ── Modal Dialogs ─────────────────────────────────────────────────────────── */
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 20, 12, 0.7);
+  pointer-events: none;
+  z-index: 50;
+}
+.modal.hidden {
+  display: none;
+}
+.modal-inner {
+  background: rgba(15, 35, 25, 0.96);
+  border: 1px solid rgba(120, 220, 150, 0.18);
+  border-radius: 18px;
+  padding: 24px;
+  width: min(420px, calc(100vw - 40px));
+  color: var(--cream);
+  pointer-events: auto;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.03);
+}
+.shop-modal-inner {
+  width: min(760px, calc(100vw - 40px));
+  max-height: min(78vh, 720px);
+  overflow: auto;
+}
+.modal h2 {
+  margin-bottom: 14px;
+  font-size: 20px;
+}
+.modal-close,
+#sell-all-btn {
+  margin-top: 16px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 12px;
+  background: var(--green-mid);
+  color: var(--cream);
+  cursor: pointer;
+  font-size: 13px;
+}
+.modal-close:hover,
+#sell-all-btn:hover {
+  background: var(--green-light);
+}
+.shop-row,
+.sell-row {
+  display: grid;
+  grid-template-columns: auto minmax(110px, 1fr) auto auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.sell-row {
+  grid-template-columns: auto minmax(110px, 1fr) auto auto auto;
+}
+.shop-row:last-child,
+.sell-row:last-child {
+  border-bottom: none;
+}
+.shop-row .qty-row {
+  display: flex;
+  gap: 6px;
+}
+.shop-row button {
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: var(--cream);
+  border-radius: 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+.shop-row button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.shop-meta {
+  color: rgba(245, 240, 232, 0.68);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.trend {
+  display: inline-block;
+  min-width: 1em;
+  text-align: center;
+  font-weight: 800;
+}
+.trend.up { color: #52b788; }
+.trend.down { color: #e63946; }
+.trend.neutral { color: #9aa0a6; }
+/* ── Toast Notifications ──────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 20px;
+  color: var(--cream);
+  font-size: 14px;
+  padding: 8px 20px;
+  pointer-events: none;
+  animation: toast-in 0.25s ease, toast-out 0.4s ease 2.6s forwards;
+  z-index: 100;
+}
+.toast.success { border-color: #52b788; color: #52b788; }
+.toast.error   { border-color: #e63946; color: #ff6b7a; }
+.toast.info    { border-color: var(--gold); color: var(--gold); }
+
+@keyframes toast-in  { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+@keyframes toast-out { from { opacity: 1; } to   { opacity: 0; } }
