@@ -111,6 +111,29 @@ const STARTING_MONEY  = 100;
 const STARTING_SEEDS  = { carrot: 3, tomato: 1 };
 const MUTATION_CHANCE = 0.05; // 5% chance double value on harvest
 const MUTATION_MULTIPLIER = 2; // mutated crops sell for 2x
+const MAX_HEALTH = 100;
+const RESPAWN_POSITION = { x: 0, z: 5 };
+const BOOST_TICK_MS = 2000;
+
+// Make every plant seed at least 2x more expensive than the old economy.
+for (const info of Object.values(SEED_CATALOG)) {
+  info.buyPrice *= 2;
+}
+
+const GEAR_CATALOG = {
+  wateringCan: { name: 'Watering Can', type: 'booster', buyPrice: 90, size: 2, durationMs: 15000, speedMultiplier: 2 },
+  sprinkler: { name: 'Sprinkler', type: 'booster', buyPrice: 240, size: 3, durationMs: 60000, speedMultiplier: 2 },
+  ak47: { name: 'AK-47', type: 'weapon', buyPrice: 650, damage: 25, ammoOnBuy: 30, range: 13 },
+  shotgun: { name: 'Shotgun', type: 'weapon', buyPrice: 900, damage: 50, ammoOnBuy: 12, range: 7 },
+  minigun: { name: 'Minigun', type: 'weapon', buyPrice: 1800, damage: 16, ammoOnBuy: 80, range: 14 },
+};
+
+const WEAPON_CATALOG = {
+  pistol: { name: 'Pistol', damage: 34, range: 11 },
+  ak47: GEAR_CATALOG.ak47,
+  shotgun: GEAR_CATALOG.shotgun,
+  minigun: GEAR_CATALOG.minigun,
+};
 
 // Garden expansion levels: level 0 = 3x3, level 1 = 4x4, etc.
 const EXPANSION_COSTS = [500, 1000, 5000, 10000]; // costs for levels 1-4
@@ -228,6 +251,14 @@ function createPlayer(id) {
     money: STARTING_MONEY,
     seeds: { ...STARTING_SEEDS },
     crops: {},  // { seedType: { normal, mutated } }
+    gear: {},
+    weapons: { pistol: true },
+    ammo: { pistol: 6 },
+    activeWeapon: 'pistol',
+    health: MAX_HEALTH,
+    position: { ...RESPAWN_POSITION },
+    holdingStolen: null,
+    activeBoosts: [],
     plots,
     expansionLevel: 0, // 0 = 3x3, 1 = 4x4, 2 = 5x5, 3 = 6x6
   };
@@ -241,6 +272,14 @@ function getPlayerPublic(player) {
     money: player.money,
     seeds: player.seeds,
     crops: player.crops,
+    gear: player.gear,
+    weapons: player.weapons,
+    ammo: player.ammo,
+    activeWeapon: player.activeWeapon,
+    health: player.health,
+    maxHealth: MAX_HEALTH,
+    position: player.position,
+    holdingStolen: player.holdingStolen,
     expansionLevel: player.expansionLevel,
     gridSize: GRID_SIZES[player.expansionLevel],
     plots: player.plots.map(plot => ({
@@ -264,10 +303,16 @@ function getPlayerPublic(player) {
 // ─── Growth Ticks ─────────────────────────────────────────────────────────────
 setInterval(() => {
   let anyChanged = false;
+  const now = Date.now();
   for (const [, player] of players) {
+    player.activeBoosts = player.activeBoosts.filter(boost => boost.endsAt > now);
     for (const plot of player.plots) {
       for (const cell of plot.cells) {
         if (!cell.plant) continue;
+        const boost = getActiveBoost(player, cell.row, cell.col, now);
+        if (boost) {
+          cell.plant.plantedAt -= BOOST_TICK_MS * (boost.speedMultiplier - 1);
+        }
         const { plantedAt, growTime, stage } = cell.plant;
         const maxStages = SEED_CATALOG[cell.plant.seedType]?.stages ?? 4;
         const targetStage = Math.min(
@@ -283,6 +328,16 @@ setInterval(() => {
   }
   if (anyChanged) broadcastAllGardens();
 }, 2000); // check every 2s
+
+function getActiveBoost(player, row, col, now = Date.now()) {
+  return player.activeBoosts.find(boost =>
+    boost.endsAt > now
+      && row >= boost.row
+      && col >= boost.col
+      && row < boost.row + boost.size
+      && col < boost.col + boost.size
+  );
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 let uidCounter = 1;
@@ -324,6 +379,8 @@ wss.on('connection', (ws) => {
       catalog: SEED_CATALOG,
       stock: currentShopStock,
       cropPrices: cropPricesForWelcome(),
+      gearCatalog: GEAR_CATALOG,
+      weaponCatalog: WEAPON_CATALOG,
       restockCount,
     },
     allGardens: [...players.values()].map(getPlayerPublic),
@@ -352,6 +409,15 @@ wss.on('connection', (ws) => {
 // ─── Message Handlers ─────────────────────────────────────────────────────────
 function handleMessage(player, msg) {
   switch (msg.type) {
+    case 'updatePosition': {
+      const x = Number(msg.x);
+      const z = Number(msg.z);
+      if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+      player.position = { x: clamp(x, -150, 150), z: clamp(z, -150, 150) };
+      maybeDepositStolenCrop(player);
+      broadcast({ type: 'playerMoved', playerId: player.id, position: player.position, health: player.health, holdingStolen: player.holdingStolen });
+      break;
+    }
 
     case 'buySeed': {
       const { seedType, qty = 1 } = msg;
@@ -369,6 +435,74 @@ function handleMessage(player, msg) {
       
       sendState(player);
       broadcast({ type: 'shopRestocked', stock: currentShopStock });
+      break;
+    }
+
+    case 'buyGear': {
+      const { itemType } = msg;
+      const item = GEAR_CATALOG[itemType];
+      if (!item) return sendError(player, 'Unknown gear item');
+      if (player.money < item.buyPrice) return sendError(player, 'Not enough money');
+      player.money -= item.buyPrice;
+      if (item.type === 'weapon') {
+        player.weapons[itemType] = true;
+        player.ammo[itemType] = (player.ammo[itemType] || 0) + item.ammoOnBuy;
+        player.activeWeapon = itemType;
+      } else {
+        player.gear[itemType] = (player.gear[itemType] || 0) + 1;
+      }
+      sendState(player);
+      break;
+    }
+
+    case 'useGear': {
+      const { itemType, plotId, cellRow, cellCol } = msg;
+      const item = GEAR_CATALOG[itemType];
+      if (!item || item.type !== 'booster') return sendError(player, 'That gear cannot be used on crops');
+      if ((player.gear[itemType] || 0) < 1) return sendError(player, `No ${item.name} in inventory`);
+      const plot = player.plots[plotId];
+      if (!plot || plot.playerId !== player.id) return sendError(player, 'Invalid plot');
+      if (!plot.cells.find(c => c.row === cellRow && c.col === cellCol)) return sendError(player, 'Invalid cell');
+      player.gear[itemType]--;
+      player.activeBoosts.push({
+        itemType,
+        row: cellRow,
+        col: cellCol,
+        size: item.size,
+        speedMultiplier: item.speedMultiplier,
+        endsAt: Date.now() + item.durationMs,
+      });
+      sendState(player);
+      send(player.ws, { type: 'gearUsed', itemType, durationMs: item.durationMs });
+      break;
+    }
+
+    case 'equipWeapon': {
+      const { weaponType } = msg;
+      if (!player.weapons[weaponType]) return sendError(player, 'You do not own that weapon');
+      player.activeWeapon = weaponType;
+      sendState(player);
+      break;
+    }
+
+    case 'shootPlayer': {
+      const target = players.get(msg.targetId);
+      if (!target) return sendError(player, 'Target is gone');
+      const weapon = WEAPON_CATALOG[player.activeWeapon];
+      if (!weapon) return sendError(player, 'No weapon equipped');
+      if ((player.ammo[player.activeWeapon] || 0) <= 0) return sendError(player, `${weapon.name} is out of ammo`);
+      if (distance(player.position, target.position) > weapon.range) return sendError(player, 'Target is out of range');
+      player.ammo[player.activeWeapon]--;
+      target.health = Math.max(0, target.health - weapon.damage);
+      if (target.health <= 0) {
+        respawnPlayer(target);
+        broadcast({ type: 'playerDefeated', attackerId: player.id, victimId: target.id });
+      } else {
+        broadcast({ type: 'playerHit', attackerId: player.id, victimId: target.id, health: target.health });
+      }
+      sendState(player);
+      sendState(target);
+      broadcastAllGardens();
       break;
     }
 
@@ -412,6 +546,28 @@ function handleMessage(player, msg) {
       if (mutated) player.crops[seedType].mutated++;
       else player.crops[seedType].normal++;
       sendState(player);
+      broadcastAllGardens();
+      break;
+    }
+
+    case 'stealPlant': {
+      const { ownerId, plotId, cellRow, cellCol } = msg;
+      if (player.holdingStolen) return sendError(player, 'Return your stolen crop before stealing another');
+      if (ownerId === player.id) return sendError(player, 'Use harvest mode on your own garden to harvest');
+      const owner = players.get(ownerId);
+      if (!owner) return sendError(player, 'That player is no longer online');
+      const plot = owner.plots[plotId];
+      if (!plot) return sendError(player, 'Invalid target plot');
+      const cell = plot.cells.find(c => c.row === cellRow && c.col === cellCol);
+      if (!cell || !cell.plant) return sendError(player, 'Nothing to steal');
+      const maxStages = SEED_CATALOG[cell.plant.seedType]?.stages ?? 4;
+      if (cell.plant.stage < maxStages - 1) return sendError(player, 'That crop is not ready yet');
+      const { seedType, mutated } = cell.plant;
+      cell.plant = null;
+      player.holdingStolen = { ownerId, seedType, mutated: !!mutated };
+      sendState(player);
+      sendState(owner);
+      broadcast({ type: 'cropStolen', thiefId: player.id, ownerId, seedType });
       broadcastAllGardens();
       break;
     }
@@ -475,6 +631,47 @@ function handleMessage(player, msg) {
     default:
       sendError(player, `Unknown message type: ${msg.type}`);
   }
+}
+
+function maybeDepositStolenCrop(player) {
+  if (!player.holdingStolen) return;
+  if (distance(player.position, RESPAWN_POSITION) > 4) return;
+  const { seedType, mutated } = player.holdingStolen;
+  if (!player.crops[seedType]) player.crops[seedType] = { normal: 0, mutated: 0 };
+  if (mutated) player.crops[seedType].mutated++;
+  else player.crops[seedType].normal++;
+  player.holdingStolen = null;
+  send(player.ws, { type: 'stolenDeposited', seedType });
+  sendState(player);
+}
+
+function respawnPlayer(player) {
+  returnHeldCrop(player);
+  player.health = MAX_HEALTH;
+  player.position = { ...RESPAWN_POSITION };
+}
+
+function returnHeldCrop(player) {
+  if (!player.holdingStolen) return;
+  const owner = players.get(player.holdingStolen.ownerId);
+  if (owner) {
+    const { seedType, mutated } = player.holdingStolen;
+    if (!owner.crops[seedType]) owner.crops[seedType] = { normal: 0, mutated: 0 };
+    if (mutated) owner.crops[seedType].mutated++;
+    else owner.crops[seedType].normal++;
+    sendState(owner);
+  }
+  player.holdingStolen = null;
+}
+
+function distance(a, b) {
+  const dx = (a?.x || 0) - (b?.x || 0);
+  const dz = (a?.z || 0) - (b?.z || 0);
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function sendState(player) {

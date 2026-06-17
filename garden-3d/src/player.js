@@ -83,6 +83,11 @@ export function createPlayer(scene) {
     return { x: root.position.x, z: root.position.z };
   }
 
+  function setPosition(x, z) {
+    root.position.x = x;
+    root.position.z = z;
+  }
+
   /** Distance from player to a world-space point */
   function distanceTo(wx, wz) {
     const dx = root.position.x - wx;
@@ -90,5 +95,5 @@ export function createPlayer(scene) {
     return Math.sqrt(dx * dx + dz * dz);
   }
 
-  return { root, update, getPosition, distanceTo };
+  return { root, update, getPosition, setPosition, distanceTo };
 }

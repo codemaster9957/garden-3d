@@ -88,15 +88,17 @@ function createBuilding(scene, x, z, color, accentColor, signText) {
 
 export function createWorld(scene) {
   // Seed shop is to the left of the player's garden
-  const seedShop = createBuilding(scene, -14, -2, 0x6b9e5e, 0x3d7a45, '🌱 Seed Shop  [E]');
+  const seedShop = createBuilding(scene, -14, -2, 0x6b9e5e, 0x3d7a45, 'Seed Shop [E]');
+  const gearShop = createBuilding(scene, 0, -14, 0x5b6fa6, 0x263b78, 'Gear Shop [E]');
 
   // Sell stand is to the right
-  const sellStand = createBuilding(scene, 14, -2, 0xcb8a3e, 0x9b5e1c, '💰 Sell Stand [E]');
+  const sellStand = createBuilding(scene, 14, -2, 0xcb8a3e, 0x9b5e1c, 'Sell Stand [E]');
 
-  const buildings = [seedShop, sellStand];
+  const buildings = [seedShop, gearShop, sellStand];
 
   return {
     seedShop,
+    gearShop,
     sellStand,
     collides(x, z) {
       return buildings.some(building => building.collides(x, z));

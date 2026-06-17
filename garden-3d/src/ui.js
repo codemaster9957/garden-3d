@@ -3,16 +3,19 @@
  */
 
 import { SEED_CATALOG, SEED_KEYS, seedColorHex } from './seeds.js';
-import { buySeed, sellAll, expandGarden } from './network.js';
+import { buySeed, buyGear, equipWeapon, sellAll, expandGarden } from './network.js';
 
 const EXPANSION_COSTS = [500, 1000, 5000, 10000];
 const MUTATION_MULTIPLIER = 2;
 
 let selectedSeed = 'carrot';
 let harvestMode = false;
+let selectedGear = null;
 
 export function getSelectedSeed() { return selectedSeed; }
 export function isHarvestMode() { return harvestMode; }
+export function getSelectedGear() { return selectedGear; }
+export function clearSelectedGear() { selectedGear = null; _refreshGearPanel(); }
 
 export function buildHUD() {
   const hud = document.createElement('div');
@@ -24,13 +27,15 @@ export function buildHUD() {
     </div>
     <div id="top-bar">
       <span id="money-panel">Coins: <strong id="money">0</strong></span>
+      <span id="health-panel">HP: <strong id="health">100</strong></span>
       <span id="crop-panel">Crops: <span id="crops">none</span></span>
       <button id="expand-btn" type="button">Expand: 500</button>
     </div>
+    <div id="gear-panel"></div>
     <div id="hotbar"></div>
     <div id="mode-indicator"></div>
     <div id="interact-hint" class="hidden"></div>
-    <div id="hint-bar">WASD move | 1-9/0 select seed | E interact | H harvest mode</div>
+    <div id="hint-bar">WASD move | 1-9/0 select seed | E interact | H harvest/steal | F fire</div>
   `;
   document.body.appendChild(hud);
   document.getElementById('expand-btn')?.addEventListener('click', expandGarden);
@@ -42,7 +47,7 @@ export function initHotbar() {
   hotbar.innerHTML = '';
   SEED_KEYS.forEach((key) => {
     const btn = document.createElement('button');
-    btn.className = 'hotbar-btn';
+    btn.className = 'hotbar-btn hidden';
     btn.dataset.seed = key;
     btn.innerHTML = `<span class="seed-dot" style="background:${seedColorHex(key)}"></span><span class="hk">${SEED_CATALOG[key].hotkey ?? ''}</span><span class="sname">${SEED_CATALOG[key].name}</span><span class="seed-count">x0</span>`;
     btn.addEventListener('click', () => _selectSeed(key));
@@ -54,13 +59,17 @@ export function initHotbar() {
 function _selectSeed(key) {
   selectedSeed = key;
   harvestMode = false;
+  selectedGear = null;
   _refreshHotbar();
+  _refreshGearPanel();
 }
 
 export function toggleHarvestMode() {
   harvestMode = !harvestMode;
   selectedSeed = harvestMode ? null : SEED_KEYS[0];
+  selectedGear = null;
   _refreshHotbar();
+  _refreshGearPanel();
 }
 
 function _refreshHotbar() {
@@ -71,8 +80,11 @@ function _refreshHotbar() {
   const ind = document.getElementById('mode-indicator');
   if (!ind) return;
   if (harvestMode) {
-    ind.textContent = 'Harvest Mode - press E near a plant';
+    ind.textContent = 'Harvest/Steal Mode - click a ready plant';
     ind.className = 'harvest';
+  } else if (selectedGear) {
+    ind.textContent = `Using: ${gearLabel(selectedGear)} - click your garden`;
+    ind.className = 'plant';
   } else {
     ind.textContent = `Selected: ${selectedSeed ? SEED_CATALOG[selectedSeed].name : '-'}`;
     ind.className = 'plant';
@@ -103,14 +115,28 @@ export function updateMoney(amount) {
   if (el) el.textContent = amount;
 }
 
+export function updateHealth(amount, max = 100) {
+  const el = document.getElementById('health');
+  if (el) el.textContent = `${amount}/${max}`;
+}
+
 export function updateSeeds(seeds) {
   document.querySelectorAll('.hotbar-btn').forEach(btn => {
     const key = btn.dataset.seed;
     const count = seeds[key] || 0;
     const badge = btn.querySelector('.seed-count');
     if (badge) badge.textContent = `x${count}`;
-    btn.classList.toggle('empty', count === 0);
+    btn.classList.toggle('hidden', count === 0);
   });
+  if (!selectedSeed || (seeds[selectedSeed] || 0) === 0) {
+    selectedSeed = Object.keys(seeds).find(key => (seeds[key] || 0) > 0) || null;
+  }
+  _refreshHotbar();
+}
+
+export function updatePlayerInventory(state) {
+  updateHealth(state.health ?? 100, state.maxHealth ?? 100);
+  _renderGearPanel(state);
 }
 
 export function updateCrops(crops) {
@@ -156,6 +182,7 @@ export function showToast(text, type = 'info') {
 let _shopCatalog = {};
 let _shopStock = {};
 let _cropPrices = {};
+let _gearCatalog = {};
 let _restockCount = 0;
 let _shopOpen = false;
 
@@ -168,6 +195,8 @@ export function buildShopModal() {
       <h2>Seed Shop</h2>
       <div id="restock-count" class="shop-meta">Restocks: 0</div>
       <div id="shop-items"></div>
+      <h2 class="shop-section-title">Gear Shop</h2>
+      <div id="gear-shop-items"></div>
       <button id="shop-close" class="modal-close">Close [E]</button>
     </div>
   `;
@@ -180,12 +209,14 @@ export function openShopModal() { _shopOpen = true; document.getElementById('sho
 export function closeShopModal() { _shopOpen = false; document.getElementById('shop-modal')?.classList.add('hidden'); }
 export function isShopOpen() { return _shopOpen; }
 
-export function updateShop(catalog, stock, cropPrices, restockCount) {
+export function updateShop(catalog, stock, cropPrices, restockCount, gearCatalog) {
   _shopCatalog = catalog ?? _shopCatalog;
   _shopStock = stock ?? _shopStock;
   _cropPrices = cropPrices ?? _cropPrices;
+  _gearCatalog = gearCatalog ?? _gearCatalog;
   _restockCount = restockCount ?? _restockCount;
   _renderShopItems();
+  _renderGearShopItems();
   if (_sellOpen) _renderSellItems();
 }
 
@@ -219,6 +250,92 @@ function _renderShopItems() {
     });
     el.appendChild(div);
   }
+}
+
+function _renderGearShopItems() {
+  const el = document.getElementById('gear-shop-items');
+  if (!el) return;
+  el.innerHTML = '';
+  for (const [key, info] of Object.entries(_gearCatalog)) {
+    const div = document.createElement('div');
+    div.className = 'gear-shop-row';
+    const detail = info.type === 'weapon'
+      ? `Damage ${info.damage} | Ammo +${info.ammoOnBuy}`
+      : `${info.size}x${info.size} | ${Math.round(info.durationMs / 1000)}s`;
+    div.innerHTML = `
+      <span class="gear-icon">${gearIcon(key)}</span>
+      <span class="sname">${info.name}</span>
+      <span class="stock">${detail}</span>
+      <span class="price">Buy: ${info.buyPrice}</span>
+      <button data-gear="${key}">Buy</button>
+    `;
+    div.querySelector('button').addEventListener('click', () => buyGear(key));
+    el.appendChild(div);
+  }
+}
+
+function _renderGearPanel(state) {
+  const el = document.getElementById('gear-panel');
+  if (!el) return;
+  const gear = state.gear || {};
+  const weapons = state.weapons || {};
+  const ammo = state.ammo || {};
+  const activeWeapon = state.activeWeapon || 'pistol';
+  const holding = state.holdingStolen;
+  const gearButtons = Object.entries(gear)
+    .filter(([, count]) => count > 0)
+    .map(([key, count]) => `<button class="gear-btn ${selectedGear === key ? 'active' : ''}" data-use-gear="${key}">${gearIcon(key)} ${gearLabel(key)} x${count}</button>`)
+    .join('');
+  const weaponButtons = Object.keys(weapons)
+    .filter(key => weapons[key])
+    .map(key => `<button class="gear-btn ${activeWeapon === key ? 'active' : ''}" data-equip-weapon="${key}">${gearIcon(key)} ${gearLabel(key)} ${ammo[key] || 0}</button>`)
+    .join('');
+  el.innerHTML = `
+    ${holding ? `<span class="holding">Holding stolen ${SEED_CATALOG[holding.seedType]?.name ?? holding.seedType}</span>` : ''}
+    ${gearButtons}
+    ${weaponButtons}
+  `;
+  el.querySelectorAll('[data-use-gear]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedGear = btn.dataset.useGear;
+      harvestMode = false;
+      selectedSeed = null;
+      _refreshHotbar();
+      _refreshGearPanel();
+    });
+  });
+  el.querySelectorAll('[data-equip-weapon]').forEach(btn => {
+    btn.addEventListener('click', () => equipWeapon(btn.dataset.equipWeapon));
+  });
+  _refreshHotbar();
+}
+
+function _refreshGearPanel() {
+  document.querySelectorAll('.gear-btn[data-use-gear]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.useGear === selectedGear);
+  });
+  _refreshHotbar();
+}
+
+function gearIcon(key) {
+  if (key === 'wateringCan') return 'Can';
+  if (key === 'sprinkler') return 'Spr';
+  if (key === 'ak47') return 'AK';
+  if (key === 'shotgun') return 'SG';
+  if (key === 'minigun') return 'MG';
+  if (key === 'pistol') return 'P';
+  return '*';
+}
+
+function gearLabel(key) {
+  return _gearCatalog[key]?.name || {
+    wateringCan: 'Watering Can',
+    sprinkler: 'Sprinkler',
+    pistol: 'Pistol',
+    ak47: 'AK-47',
+    shotgun: 'Shotgun',
+    minigun: 'Minigun',
+  }[key] || key;
 }
 
 let _sellCrops = {};

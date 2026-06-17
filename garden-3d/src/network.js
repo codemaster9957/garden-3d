@@ -114,6 +114,30 @@ export function buySeed(seedType, qty = 1) {
   send({ type: 'buySeed', seedType, qty });
 }
 
+export function buyGear(itemType) {
+  send({ type: 'buyGear', itemType });
+}
+
+export function useGear(itemType, plotId, cellRow, cellCol) {
+  send({ type: 'useGear', itemType, plotId, cellRow, cellCol });
+}
+
+export function equipWeapon(weaponType) {
+  send({ type: 'equipWeapon', weaponType });
+}
+
+export function shootPlayer(targetId) {
+  send({ type: 'shootPlayer', targetId });
+}
+
+export function stealPlant(ownerId, plotId, cellRow, cellCol) {
+  send({ type: 'stealPlant', ownerId, plotId, cellRow, cellCol });
+}
+
+export function updatePosition(x, z) {
+  send({ type: 'updatePosition', x, z });
+}
+
 export function plantSeed(plotId, cellRow, cellCol, seedType) {
   send({ type: 'plantSeed', plotId, cellRow, cellCol, seedType });
 }

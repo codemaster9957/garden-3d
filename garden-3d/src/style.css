@@ -76,6 +76,44 @@ body {
   white-space: nowrap;
 }
 
+#gear-panel {
+  position: absolute;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: min(96vw, 980px);
+  overflow-x: auto;
+  pointer-events: auto;
+}
+
+.gear-btn,
+.holding {
+  background: rgba(15, 35, 25, 0.9);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 8px;
+  color: var(--cream);
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.gear-btn {
+  cursor: pointer;
+}
+
+.gear-btn.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.holding {
+  border-color: #e63946;
+  color: #ffb3bd;
+}
+
 #expand-btn {
   background: var(--gold);
   color: #2d1a00;
@@ -302,6 +340,7 @@ body {
   background: var(--green-light);
 }
 .shop-row,
+.gear-shop-row,
 .sell-row {
   display: grid;
   grid-template-columns: auto minmax(110px, 1fr) auto auto auto auto;
@@ -310,10 +349,14 @@ body {
   padding: 10px 0;
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
+.gear-shop-row {
+  grid-template-columns: auto minmax(110px, 1fr) auto auto auto;
+}
 .sell-row {
   grid-template-columns: auto minmax(110px, 1fr) auto auto auto;
 }
 .shop-row:last-child,
+.gear-shop-row:last-child,
 .sell-row:last-child {
   border-bottom: none;
 }
@@ -328,6 +371,17 @@ body {
   border-radius: 8px;
   padding: 5px 8px;
   cursor: pointer;
+}
+.gear-shop-row button {
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: var(--cream);
+  border-radius: 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+.shop-section-title {
+  margin-top: 18px;
 }
 .shop-row button:disabled {
   opacity: 0.35;
