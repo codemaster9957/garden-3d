@@ -4,7 +4,6 @@
 
 import * as THREE from 'three';
 import { createGarden } from './garden.js';
-import { PLAYER_GAP } from './scene.js';
 
 const others = new Map();
 const remoteCells = new Map();
@@ -23,11 +22,11 @@ export function updateOtherPlayers(scene, allGardens, myPlayerId) {
   }
 
   remoteGardens.forEach((gData, idx) => {
-    const offsetX = (idx + 1) * PLAYER_GAP;
+    const origin = gData.plotOrigin || { x: (idx + 1) * 18, z: 8 };
     const gridSize = gData.gridSize || 3;
 
     if (!others.has(gData.id)) {
-      const garden = createGarden(scene, offsetX, 0, gridSize);
+      const garden = createGarden(scene, origin.x, origin.z, gridSize);
       const label = makeLabel(gData.id);
       const avatar = createRemoteAvatar(scene, gData.id);
       others.set(gData.id, { garden, label, avatar, data: gData });
@@ -36,11 +35,14 @@ export function updateOtherPlayers(scene, allGardens, myPlayerId) {
     const entry = others.get(gData.id);
     if (entry.garden.gridSize !== gridSize) {
       entry.garden.dispose();
-      entry.garden = createGarden(scene, offsetX, 0, gridSize);
+      entry.garden = createGarden(scene, origin.x, origin.z, gridSize);
+    } else if (entry.garden.originX !== origin.x || entry.garden.originZ !== origin.z) {
+      entry.garden.dispose();
+      entry.garden = createGarden(scene, origin.x, origin.z, gridSize);
     }
 
     entry.data = gData;
-    entry.avatar.position.set(gData.position?.x ?? offsetX, 0, gData.position?.z ?? 5);
+    entry.avatar.position.set(gData.position?.x ?? origin.x, 0, gData.position?.z ?? origin.z + 5);
     entry.label.textContent = `${gData.id} HP ${gData.health ?? 100}`;
     entry.garden.update(gData.plots);
 

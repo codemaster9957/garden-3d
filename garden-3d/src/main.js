@@ -29,6 +29,7 @@ let myGarden = null;
 let myCellMeshes = [];
 let player = null;
 let world  = null;
+let serverFeatures = {};
 
 // ─── Network ──────────────────────────────────────────────────────────────────
 setConnectionStatus(false, null);
@@ -39,14 +40,16 @@ Net.onMessage('connectionError', () => showToast('Cannot reach server', 'error')
 
 Net.onMessage('welcome', (msg) => {
   setConnectionStatus(true, msg.playerId);
+  serverFeatures = msg.serverFeatures || {};
 
   world = createWorld(scene);
 
   // Build local player and garden
   const gridSize = msg.state.gridSize || 3;
+  const plotOrigin = msg.state.plotOrigin || { x: 0, z: 0 };
   player       = createPlayer(scene);
-  player.setPosition(msg.state.position?.x ?? 0, msg.state.position?.z ?? 5);
-  myGarden     = createGarden(scene, 0, 0, gridSize);
+  player.setPosition(msg.state.position?.x ?? plotOrigin.x, msg.state.position?.z ?? plotOrigin.z + 5);
+  myGarden     = createGarden(scene, plotOrigin.x, plotOrigin.z, gridSize);
   myCellMeshes = [...myGarden.cellMap.keys()];
   const pos     = player.getPosition();
   setCameraTarget(pos.x, pos.z);
@@ -70,10 +73,15 @@ Net.onMessage('stateUpdate', (msg) => {
   // Check if garden was expanded
   if (msg.state.gridSize && msg.state.gridSize !== myGarden.gridSize) {
     // Remove old garden and create new one with new size
+    const plotOrigin = msg.state.plotOrigin || { x: myGarden.originX, z: myGarden.originZ };
     myGarden.dispose();
-    myGarden = createGarden(scene, 0, 0, msg.state.gridSize);
+    myGarden = createGarden(scene, plotOrigin.x, plotOrigin.z, msg.state.gridSize);
     myCellMeshes = [...myGarden.cellMap.keys()];
     showToast('🌱 Garden expanded!', 'success');
+  } else if (msg.state.plotOrigin && (myGarden.originX !== msg.state.plotOrigin.x || myGarden.originZ !== msg.state.plotOrigin.z)) {
+    myGarden.dispose();
+    myGarden = createGarden(scene, msg.state.plotOrigin.x, msg.state.plotOrigin.z, msg.state.gridSize || myGarden.gridSize);
+    myCellMeshes = [...myGarden.cellMap.keys()];
   }
   
   myGarden.update(msg.state.plots);
@@ -241,7 +249,7 @@ function loop() {
     const pos = player.getPosition();
     setCameraTarget(pos.x, pos.z);
     updateWorldUI();
-    if (Net.isConnected() && now - lastPositionSent > 150) {
+    if (Net.isConnected() && serverFeatures.positionUpdates && now - lastPositionSent > 150) {
       Net.updatePosition(pos.x, pos.z);
       lastPositionSent = now;
     }

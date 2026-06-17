@@ -112,8 +112,8 @@ const STARTING_SEEDS  = { carrot: 3, tomato: 1 };
 const MUTATION_CHANCE = 0.05; // 5% chance double value on harvest
 const MUTATION_MULTIPLIER = 2; // mutated crops sell for 2x
 const MAX_HEALTH = 100;
-const RESPAWN_POSITION = { x: 0, z: 5 };
 const BOOST_TICK_MS = 2000;
+const PLOT_SPACING = 18;
 
 // Make every plant seed at least 2x more expensive than the old economy.
 for (const info of Object.values(SEED_CATALOG)) {
@@ -225,8 +225,9 @@ setInterval(restock, RESTOCK_MS);
 // ─── Player Store ─────────────────────────────────────────────────────────────
 const players = new Map(); // playerId → playerState
 
-function createPlayer(id) {
+function createPlayer(id, slotIndex = 0) {
   const gridSize = GRID_SIZES[0]; // start at 3x3
+  const plotOrigin = getPlotOrigin(slotIndex);
   
   // Create cells with explicit row/col for stable positioning across expansions
   const cells = [];
@@ -256,7 +257,8 @@ function createPlayer(id) {
     ammo: { pistol: 6 },
     activeWeapon: 'pistol',
     health: MAX_HEALTH,
-    position: { ...RESPAWN_POSITION },
+    plotOrigin,
+    position: getSpawnPosition(plotOrigin),
     holdingStolen: null,
     activeBoosts: [],
     plots,
@@ -278,6 +280,7 @@ function getPlayerPublic(player) {
     activeWeapon: player.activeWeapon,
     health: player.health,
     maxHealth: MAX_HEALTH,
+    plotOrigin: player.plotOrigin,
     position: player.position,
     holdingStolen: player.holdingStolen,
     expansionLevel: player.expansionLevel,
@@ -285,6 +288,8 @@ function getPlayerPublic(player) {
     plots: player.plots.map(plot => ({
       id: plot.id,
       playerId: plot.playerId,
+      originX: player.plotOrigin.x,
+      originZ: player.plotOrigin.z,
       cells: plot.cells.map(cell => {
         if (!cell.plant) return { row: cell.row, col: cell.col, plant: null };
         const { seedType, stage, mutated, plantedAt, growTime } = cell.plant;
@@ -364,7 +369,7 @@ function send(ws, msg) {
 // ─── Connection Handler ───────────────────────────────────────────────────────
 wss.on('connection', (ws) => {
   const playerId = nextId();
-  const player   = createPlayer(playerId);
+  const player   = createPlayer(playerId, players.size);
   player.ws      = ws;
   players.set(playerId, player);
 
@@ -374,6 +379,7 @@ wss.on('connection', (ws) => {
   send(ws, {
     type: 'welcome',
     playerId,
+    serverFeatures: { positionUpdates: true, serverPlots: true },
     state: getPlayerPublic(player),
     shop: { 
       catalog: SEED_CATALOG,
@@ -635,7 +641,7 @@ function handleMessage(player, msg) {
 
 function maybeDepositStolenCrop(player) {
   if (!player.holdingStolen) return;
-  if (distance(player.position, RESPAWN_POSITION) > 4) return;
+  if (distance(player.position, getSpawnPosition(player.plotOrigin)) > 4) return;
   const { seedType, mutated } = player.holdingStolen;
   if (!player.crops[seedType]) player.crops[seedType] = { normal: 0, mutated: 0 };
   if (mutated) player.crops[seedType].mutated++;
@@ -648,7 +654,29 @@ function maybeDepositStolenCrop(player) {
 function respawnPlayer(player) {
   returnHeldCrop(player);
   player.health = MAX_HEALTH;
-  player.position = { ...RESPAWN_POSITION };
+  player.position = getSpawnPosition(player.plotOrigin);
+}
+
+function getPlotOrigin(slotIndex) {
+  if (slotIndex === 0) return { x: 0, z: 8 };
+  const ring = Math.ceil(slotIndex / 8);
+  const sideIndex = (slotIndex - 1) % 8;
+  const positions = [
+    { x: ring, z: 0 },
+    { x: ring, z: ring },
+    { x: 0, z: ring },
+    { x: -ring, z: ring },
+    { x: -ring, z: 0 },
+    { x: -ring, z: -ring },
+    { x: 0, z: -ring },
+    { x: ring, z: -ring },
+  ];
+  const pos = positions[sideIndex];
+  return { x: pos.x * PLOT_SPACING, z: 8 + pos.z * PLOT_SPACING };
+}
+
+function getSpawnPosition(plotOrigin) {
+  return { x: plotOrigin.x, z: plotOrigin.z + 5 };
 }
 
 function returnHeldCrop(player) {
