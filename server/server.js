@@ -24,14 +24,18 @@ const path = require('path');
 // WebSocket server attached to HTTP server
 const wss = new WebSocketServer({ server });
 
-// Serve static files from the built client
-const distPath = path.join(__dirname, '../garden-3d/dist');
-app.use(express.static(distPath));
+app.get('/', (req, res) => {
+  res.type('text/plain').send('Garden 3D WebSocket server is running.');
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', players: players.size, uptime: process.uptime() });
 });
+
+// Serve static files from the built client when this project is deployed as one app.
+const distPath = path.join(__dirname, '../garden-3d/dist');
+app.use(express.static(distPath));
 
 // SPA fallback - serve index.html for HTML requests (skip WebSocket upgrades)
 app.use((req, res, next) => {
