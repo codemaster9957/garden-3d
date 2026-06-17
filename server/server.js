@@ -15,6 +15,7 @@ const express = require('express');
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const NODE_ENV = process.env.NODE_ENV || 'development';
+const SERVER_VERSION = 'multiplayer-sync-2026-06-17-2';
 
 // Create Express app for HTTP + WebSocket
 const app = express();
@@ -27,7 +28,14 @@ const wss = new WebSocketServer({ server });
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', players: players.size, uptime: process.uptime() });
+  res.json({ status: 'ok', version: SERVER_VERSION, players: players.size, uptime: process.uptime() });
+});
+
+app.get('/version', (req, res) => {
+  res.json({
+    version: SERVER_VERSION,
+    features: { positionUpdates: true, serverPlots: true, periodicSnapshots: true },
+  });
 });
 
 // Serve static files from the built client when this project is deployed as one app.
@@ -67,6 +75,7 @@ server.listen(PORT, HOST, () => {
   console.log(`   WebSocket: ws://${HOST}:${PORT}`);
   console.log(`   Health: http://${HOST}:${PORT}/health`);
   console.log(`   Environment: ${NODE_ENV}`);
+  console.log(`   Version: ${SERVER_VERSION}`);
 });
 
 // ─── Seed / Shop Config ───────────────────────────────────────────────────────
@@ -113,7 +122,7 @@ const MUTATION_CHANCE = 0.05; // 5% chance double value on harvest
 const MUTATION_MULTIPLIER = 2; // mutated crops sell for 2x
 const MAX_HEALTH = 100;
 const BOOST_TICK_MS = 2000;
-const PLOT_SPACING = 18;
+const PLOT_SPACING = 10;
 const POSITION_SYNC_MS = 100;
 
 // Make every plant seed at least 2x more expensive than the old economy.
@@ -335,6 +344,11 @@ setInterval(() => {
   if (anyChanged) broadcastAllGardens();
 }, 2000); // check every 2s
 
+// Keep late or briefly disconnected clients in sync with player positions.
+setInterval(() => {
+  if (players.size > 1) broadcastAllGardens();
+}, 1000);
+
 function getActiveBoost(player, row, col, now = Date.now()) {
   return player.activeBoosts.find(boost =>
     boost.endsAt > now
@@ -415,22 +429,12 @@ wss.on('connection', (ws) => {
 
 // ─── Message Handlers ─────────────────────────────────────────────────────────
 function handleMessage(player, msg) {
-  switch (msg.type) {
-    case 'updatePosition': {
-      const x = Number(msg.x);
-      const z = Number(msg.z);
-      if (!Number.isFinite(x) || !Number.isFinite(z)) return;
-      player.position = { x: clamp(x, -150, 150), z: clamp(z, -150, 150) };
-      maybeDepositStolenCrop(player);
-      broadcast({ type: 'playerMoved', playerId: player.id, position: player.position, health: player.health, holdingStolen: player.holdingStolen });
-      const now = Date.now();
-      if (!player.lastPositionSyncAt || now - player.lastPositionSyncAt >= POSITION_SYNC_MS) {
-        player.lastPositionSyncAt = now;
-        broadcastAllGardens();
-      }
-      break;
-    }
+  if (msg.type === 'updatePosition' || msg.type === 'playerPosition' || msg.type === 'movePlayer') {
+    updatePlayerPosition(player, msg);
+    return;
+  }
 
+  switch (msg.type) {
     case 'buySeed': {
       const { seedType, qty = 1 } = msg;
       if (!SEED_CATALOG[seedType]) return sendError(player, 'Unknown seed type');
@@ -642,6 +646,27 @@ function handleMessage(player, msg) {
 
     default:
       sendError(player, `Unknown message type: ${msg.type}`);
+  }
+}
+
+function updatePlayerPosition(player, msg) {
+  const source = msg.position || msg;
+  const x = Number(source.x);
+  const z = Number(source.z);
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+  player.position = { x: clamp(x, -150, 150), z: clamp(z, -150, 150) };
+  maybeDepositStolenCrop(player);
+  broadcast({
+    type: 'playerMoved',
+    playerId: player.id,
+    position: player.position,
+    health: player.health,
+    holdingStolen: player.holdingStolen,
+  });
+  const now = Date.now();
+  if (!player.lastPositionSyncAt || now - player.lastPositionSyncAt >= POSITION_SYNC_MS) {
+    player.lastPositionSyncAt = now;
+    broadcastAllGardens();
   }
 }
 
