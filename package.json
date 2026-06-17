@@ -4,7 +4,10 @@
   "description": "Garden Bloom 3D — multiplayer farming game",
   "private": true,
   "scripts": {
-    "build": "npm install --prefix garden-3d && npm run build --prefix garden-3d && npm install --prefix server",
+    "build": "npm run build:railway",
+    "build:client": "npm install --prefix garden-3d && npm run build --prefix garden-3d",
+    "build:server": "npm install --prefix server",
+    "build:railway": "npm run build:client && npm run build:server",
     "start": "node server.js",
     "server": "node server/server.js",
     "client": "npm run dev --prefix garden-3d",

@@ -20,13 +20,10 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const app = express();
 const server = http.createServer(app);
 const path = require('path');
+const fs = require('fs');
 
 // WebSocket server attached to HTTP server
 const wss = new WebSocketServer({ server });
-
-app.get('/', (req, res) => {
-  res.type('text/plain').send('Garden 3D WebSocket server is running.');
-});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -34,7 +31,16 @@ app.get('/health', (req, res) => {
 });
 
 // Serve static files from the built client when this project is deployed as one app.
-const distPath = path.join(__dirname, '../garden-3d/dist');
+const distPath = process.env.CLIENT_DIST_DIR
+  ? path.resolve(process.env.CLIENT_DIST_DIR)
+  : path.join(__dirname, '../garden-3d/dist');
+const indexPath = path.join(distPath, 'index.html');
+const hasClientBuild = fs.existsSync(indexPath);
+
+if (!hasClientBuild) {
+  console.warn(`[static] Client build not found at ${indexPath}. Run npm run build:client before starting the server.`);
+}
+
 app.use(express.static(distPath));
 
 // SPA fallback - serve index.html for HTML requests (skip WebSocket upgrades)
@@ -45,9 +51,11 @@ app.use((req, res, next) => {
   }
   // Only serve index.html for requests that accept HTML
   if (req.accepts('html')) {
-    res.sendFile(path.join(distPath, 'index.html'), (err) => {
-      if (err) res.status(404).end();
-    });
+    if (!hasClientBuild) {
+      res.status(503).type('text/plain').send('Client build is missing. Run npm run build:client before starting the server.');
+      return;
+    }
+    res.sendFile(indexPath);
   } else {
     res.status(404).end();
   }
@@ -478,4 +486,3 @@ function sendError(player, message) {
   console.warn(`[error] ${player.id}: ${message}`);
 }
 
-console.log(`🌱 Garden Bloom 3D server running on ws://localhost:${PORT}`);

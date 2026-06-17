@@ -4,11 +4,32 @@
  * All outbound game actions go through this module.
  */
 
-// Determine WebSocket URL based on current location
-const SERVER_URL =
-  location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-    ? 'ws://localhost:3000'
-    : 'wss://garden-3d-production.up.railway.app';
+function toWebSocketUrl(value) {
+  if (!value) return null;
+  if (value.startsWith('ws://') || value.startsWith('wss://')) return value;
+  if (value.startsWith('http://')) return value.replace(/^http:\/\//, 'ws://');
+  if (value.startsWith('https://')) return value.replace(/^https:\/\//, 'wss://');
+  return `wss://${value}`;
+}
+
+function getServerUrl() {
+  const configuredUrl = toWebSocketUrl(import.meta.env.VITE_WS_URL);
+  if (configuredUrl) return configuredUrl;
+
+  const isLocal =
+    location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+  if (isLocal) return 'ws://localhost:3000';
+
+  if (location.hostname.endsWith('.netlify.app')) {
+    return 'wss://garden-3d-production.up.railway.app';
+  }
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${location.host}`;
+}
+
+const SERVER_URL = getServerUrl();
 
 let socket      = null;
 let connected   = false;
