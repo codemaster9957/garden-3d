@@ -28,14 +28,25 @@ const wss = new WebSocketServer({ server });
 const distPath = path.join(__dirname, '../garden-3d/dist');
 app.use(express.static(distPath));
 
-// Health check endpoint (must come BEFORE catch-all)
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', players: players.size, uptime: process.uptime() });
 });
 
-// Fallback: serve index.html for any non-API routes (single-page app)
-app.all(/.*/,  (req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
+// SPA fallback - serve index.html for HTML requests (skip WebSocket upgrades)
+app.use((req, res, next) => {
+  // Skip WebSocket upgrade requests
+  if (req.headers.upgrade === 'websocket') {
+    return next();
+  }
+  // Only serve index.html for requests that accept HTML
+  if (req.accepts('html')) {
+    res.sendFile(path.join(distPath, 'index.html'), (err) => {
+      if (err) res.status(404).end();
+    });
+  } else {
+    res.status(404).end();
+  }
 });
 
 // Start HTTP server
