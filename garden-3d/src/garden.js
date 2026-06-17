@@ -26,6 +26,7 @@ export function cellWorldOffset(row, col, gridSize) {
 export function createGarden(scene, originX = 0, originZ = 0, gridSize = 3) {
   const cellMap     = new Map();   // mesh → { plotId, row, col, playerId }
   const plantMeshes = {};          // `${plotId}_${row}_${col}` → THREE.Group
+  const cellState   = new Map();
   const root        = new THREE.Group();
   root.position.set(originX, 0, originZ);
   scene.add(root);
@@ -66,6 +67,7 @@ export function createGarden(scene, originX = 0, originZ = 0, gridSize = 3) {
       for (const cell of plot.cells) {
         const key = `${plot.id}_${cell.row}_${cell.col}`;
         const { x, z } = cellWorldOffset(cell.row, cell.col, gridSize);
+        cellState.set(key, cell);
 
         // Always remove the old plant group
         if (plantMeshes[key]) {
@@ -76,20 +78,21 @@ export function createGarden(scene, originX = 0, originZ = 0, gridSize = 3) {
 
         if (!cell.plant) continue;
 
-        const { seedType, stage, mutated } = cell.plant;
-        const maxStages = 4;
+        const { seedType, stage, mutated, quality, mutationName } = cell.plant;
+        const maxStages = SEED_CATALOG[seedType]?.stages ?? 4;
         const ratio     = stage / (maxStages - 1);
         const isReady   = stage >= maxStages - 1;
+        const qualityScale = quality === 'Giant' ? 1.55 : quality === 'Rainbow' ? 1.22 : quality === 'Gold' ? 1.14 : 1;
 
         const group = new THREE.Group();
         group.position.set(x, 0, z);
 
         // ── Stem ────────────────────────────────────────────────────────
-        const stemH   = 0.08 + ratio * 0.45;
-        const stemW   = 0.10 + ratio * 0.08;
+        const stemH   = (0.08 + ratio * 0.45) * qualityScale;
+        const stemW   = (0.10 + ratio * 0.08) * Math.min(qualityScale, 1.25);
         const stemGeo = new THREE.BoxGeometry(stemW, stemH, stemW);
         const stemMat = new THREE.MeshLambertMaterial({
-          color: plantColor(seedType, stage, maxStages),
+          color: plantColor(seedType, stage, maxStages, quality, mutationName),
         });
         const stem = new THREE.Mesh(stemGeo, stemMat);
         stem.position.y = stemH / 2 + 0.06;
@@ -97,8 +100,8 @@ export function createGarden(scene, originX = 0, originZ = 0, gridSize = 3) {
 
         // ── Fruit / head (only at stage 2+ and at full bloom) ──────────
         if (stage >= 2) {
-          const fruitSize = 0.15 + ratio * 0.22;
-          const fruitColor = SEED_CATALOG[seedType]?.color ?? 0xffffff;
+          const fruitSize = (0.15 + ratio * 0.22) * qualityScale;
+          const fruitColor = plantColor(seedType, maxStages - 1, maxStages, quality, mutationName);
 
           let fruitGeo;
           switch (seedType) {
@@ -123,16 +126,17 @@ export function createGarden(scene, originX = 0, originZ = 0, gridSize = 3) {
           const fruitMat = new THREE.MeshLambertMaterial({
             color: fruitColor,
             emissive: isReady ? fruitColor : 0x000000,
-            emissiveIntensity: isReady ? 0.18 : 0,
+            emissiveIntensity: isReady && (mutated || quality === 'Rainbow' || quality === 'Gold') ? 0.38 : isReady ? 0.18 : 0,
           });
           const fruit = new THREE.Mesh(fruitGeo, fruitMat);
           fruit.position.y = stemH + fruitSize * 0.9 + 0.06;
           group.add(fruit);
 
           // ── Mutation sparkle ring ────────────────────────────────────
-          if (mutated) {
+          if (mutated || quality === 'Rainbow' || quality === 'Gold' || quality === 'Giant') {
             const ringGeo = new THREE.TorusGeometry(fruitSize * 1.6, 0.04, 6, 12);
-            const ringMat = new THREE.MeshLambertMaterial({ color: 0xcc44ff, emissive: 0x9900cc, emissiveIntensity: 0.6 });
+            const ringColor = mutated ? 0xcc44ff : quality === 'Gold' ? 0xffd700 : quality === 'Giant' ? 0xff8c00 : 0xff5fd2;
+            const ringMat = new THREE.MeshLambertMaterial({ color: ringColor, emissive: ringColor, emissiveIntensity: 0.6 });
             const ring    = new THREE.Mesh(ringGeo, ringMat);
             ring.position.y = fruit.position.y;
             ring.rotation.x = Math.PI / 2;
@@ -153,7 +157,11 @@ export function createGarden(scene, originX = 0, originZ = 0, gridSize = 3) {
     }
   }
 
-  return { root, cellMap, update, dispose, originX, originZ, gridSize };
+  function getCellData(plotId, row, col) {
+    return cellState.get(`${plotId}_${row}_${col}`);
+  }
+
+  return { root, cellMap, update, dispose, getCellData, originX, originZ, gridSize };
 }
 
 function disposeMeshGroup(group) {

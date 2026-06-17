@@ -15,7 +15,7 @@ const express = require('express');
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const SERVER_VERSION = 'multiplayer-sync-2026-06-17-2';
+const SERVER_VERSION = 'systems-expansion-2026-06-17-1';
 
 // Create Express app for HTTP + WebSocket
 const app = express();
@@ -34,7 +34,15 @@ app.get('/health', (req, res) => {
 app.get('/version', (req, res) => {
   res.json({
     version: SERVER_VERSION,
-    features: { positionUpdates: true, serverPlots: true, periodicSnapshots: true },
+    features: {
+      positionUpdates: true,
+      serverPlots: true,
+      periodicSnapshots: true,
+      rarityShop: true,
+      weatherEvents: true,
+      cropQuality: true,
+      expandedSeeds: true,
+    },
   });
 });
 
@@ -116,6 +124,65 @@ const SEED_CATALOG = {
   dragonfruit: { name: 'Dragonfruit', buyPrice: 250, baseSellPrice: 700, growTime: 90000, stages: 4, color: 0xFF1493, stockChance: 0.05, maxStock: 1 },
 };
 
+const RARITY_CONFIG = {
+  Common: { rank: 1, border: '#9adf9a', stockMultiplier: 1.15, sellMultiplier: 1.0, growMultiplier: 0.95, mutationBonus: 0 },
+  Uncommon: { rank: 2, border: '#52b788', stockMultiplier: 0.9, sellMultiplier: 1.16, growMultiplier: 1.05, mutationBonus: 0.01 },
+  Rare: { rank: 3, border: '#4cc9f0', stockMultiplier: 0.65, sellMultiplier: 1.35, growMultiplier: 1.18, mutationBonus: 0.02 },
+  Epic: { rank: 4, border: '#b36bff', stockMultiplier: 0.42, sellMultiplier: 1.65, growMultiplier: 1.35, mutationBonus: 0.035 },
+  Legendary: { rank: 5, border: '#ffd166', stockMultiplier: 0.22, sellMultiplier: 2.1, growMultiplier: 1.7, mutationBonus: 0.055 },
+  Mythic: { rank: 6, border: '#ff5c8a', stockMultiplier: 0.12, sellMultiplier: 2.8, growMultiplier: 2.25, mutationBonus: 0.08 },
+};
+
+const SEED_DATABASE = [
+  { id: 'carrot', name: 'Carrot', rarity: 'Common', buyPrice: 6, baseSellPrice: 19, stockChance: 0.95, minStock: 2, maxStock: 8, growTime: 14000, stages: 4, color: 0xf4a261, icon: '🥕', preferredWeather: 'Golden Hour', mutationChance: 0.04, description: 'Reliable starter crop with a bright harvest.', category: 'Starter' },
+  { id: 'tomato', name: 'Tomato', rarity: 'Common', buyPrice: 10, baseSellPrice: 31, stockChance: 0.88, minStock: 1, maxStock: 6, growTime: 22000, stages: 4, color: 0xe63946, icon: '🍅', preferredWeather: 'Rain', mutationChance: 0.045, description: 'A flexible crop with solid early profit.', category: 'Starter' },
+  { id: 'potato', name: 'Potato', rarity: 'Common', buyPrice: 8, baseSellPrice: 24, stockChance: 0.92, minStock: 2, maxStock: 7, growTime: 18000, stages: 3, color: 0xc9a66b, icon: '🥔', preferredWeather: 'Fog', mutationChance: 0.035, description: 'Hardy and cheap, good for filling empty plots.', category: 'Starter' },
+  { id: 'wheat', name: 'Wheat', rarity: 'Common', buyPrice: 7, baseSellPrice: 21, stockChance: 0.94, minStock: 2, maxStock: 8, growTime: 16000, stages: 3, color: 0xf2c94c, icon: '🌾', preferredWeather: 'Golden Hour', mutationChance: 0.03, description: 'Fast crop for combos and quick coin flow.', category: 'Starter' },
+  { id: 'lettuce', name: 'Lettuce', rarity: 'Common', buyPrice: 7, baseSellPrice: 22, stockChance: 0.95, minStock: 2, maxStock: 8, growTime: 15000, stages: 3, color: 0x52b788, icon: '🥬', preferredWeather: 'Rain', mutationChance: 0.035, description: 'Quick-growing leaves that love wet weather.', category: 'Starter' },
+  { id: 'strawberry', name: 'Strawberry', rarity: 'Uncommon', buyPrice: 16, baseSellPrice: 45, stockChance: 0.7, minStock: 1, maxStock: 5, growTime: 26000, stages: 4, color: 0xff69b4, icon: '🍓', preferredWeather: 'Bee Swarm', mutationChance: 0.06, description: 'Sweet mid-game crop with good mutation odds.', category: 'Profit' },
+  { id: 'blueberry', name: 'Blueberry', rarity: 'Uncommon', buyPrice: 22, baseSellPrice: 62, stockChance: 0.58, minStock: 1, maxStock: 4, growTime: 33000, stages: 4, color: 0x4361ee, icon: '🫐', preferredWeather: 'Frost Night', mutationChance: 0.065, description: 'Compact berries that benefit from cold nights.', category: 'Profit' },
+  { id: 'pumpkin', name: 'Pumpkin', rarity: 'Uncommon', buyPrice: 30, baseSellPrice: 86, stockChance: 0.52, minStock: 1, maxStock: 3, growTime: 42000, stages: 5, color: 0xf77f00, icon: '🎃', preferredWeather: 'Golden Hour', mutationChance: 0.07, description: 'Large crop with strong sell value.', category: 'Profit' },
+  { id: 'watermelon', name: 'Watermelon', rarity: 'Uncommon', buyPrice: 34, baseSellPrice: 98, stockChance: 0.48, minStock: 1, maxStock: 3, growTime: 46000, stages: 5, color: 0xff6347, icon: '🍉', preferredWeather: 'Rain', mutationChance: 0.065, description: 'Slow but juicy profit crop.', category: 'Profit' },
+  { id: 'pepper', name: 'Pepper', rarity: 'Uncommon', buyPrice: 20, baseSellPrice: 57, stockChance: 0.6, minStock: 1, maxStock: 4, growTime: 28000, stages: 4, color: 0xff4500, icon: '🌶️', preferredWeather: 'Heatwave', mutationChance: 0.055, description: 'Spicy crop that likes hot markets.', category: 'Profit' },
+  { id: 'goldenApple', name: 'Golden Apple', rarity: 'Rare', buyPrice: 75, baseSellPrice: 210, stockChance: 0.25, minStock: 1, maxStock: 2, growTime: 62000, stages: 5, color: 0xffd700, icon: '🍏', preferredWeather: 'Golden Hour', mutationChance: 0.09, description: 'Rare orchard seed with sparkling value.', category: 'Rare' },
+  { id: 'dragonfruit', name: 'Dragonfruit', rarity: 'Rare', buyPrice: 120, baseSellPrice: 360, stockChance: 0.18, minStock: 1, maxStock: 2, growTime: 76000, stages: 5, color: 0xff1493, icon: '🐉', preferredWeather: 'Heatwave', mutationChance: 0.1, description: 'High-value exotic crop with risky timing.', category: 'Rare' },
+  { id: 'crystalMelon', name: 'Crystal Melon', rarity: 'Epic', buyPrice: 180, baseSellPrice: 610, stockChance: 0.12, minStock: 1, maxStock: 1, growTime: 92000, stages: 5, color: 0x80f7ff, icon: '💎', preferredWeather: 'Meteor Shower', mutationChance: 0.12, description: 'A crystalline melon that shines during cosmic events.', category: 'Rare' },
+  { id: 'moonflower', name: 'Moonflower', rarity: 'Epic', buyPrice: 150, baseSellPrice: 520, stockChance: 0.14, minStock: 1, maxStock: 1, growTime: 86000, stages: 5, color: 0xdedcff, icon: '🌙', preferredWeather: 'Frost Night', mutationChance: 0.12, description: 'Blooms brightest when the farm goes quiet.', category: 'Rare' },
+  { id: 'emberPepper', name: 'Ember Pepper', rarity: 'Epic', buyPrice: 165, baseSellPrice: 560, stockChance: 0.14, minStock: 1, maxStock: 1, growTime: 84000, stages: 5, color: 0xff6b35, icon: '🔥', preferredWeather: 'Heatwave', mutationChance: 0.11, description: 'A blazing pepper with heatwave bonuses.', category: 'Rare' },
+  { id: 'rainLily', name: 'Rain Lily', rarity: 'Rare', buyPrice: 70, baseSellPrice: 220, stockChance: 0.28, minStock: 1, maxStock: 2, growTime: 52000, stages: 4, color: 0x8ecae6, icon: '🌧️', preferredWeather: 'Rain', mutationChance: 0.09, description: 'Grows especially fast in rain.', category: 'Weather' },
+  { id: 'sunburstCorn', name: 'Sunburst Corn', rarity: 'Rare', buyPrice: 80, baseSellPrice: 250, stockChance: 0.25, minStock: 1, maxStock: 2, growTime: 56000, stages: 5, color: 0xffd60a, icon: '☀️', preferredWeather: 'Heatwave', mutationChance: 0.085, description: 'A sunny crop that sells well in heat.', category: 'Weather' },
+  { id: 'frostBerry', name: 'Frost Berry', rarity: 'Rare', buyPrice: 88, baseSellPrice: 280, stockChance: 0.22, minStock: 1, maxStock: 2, growTime: 58000, stages: 4, color: 0xbde0fe, icon: '❄️', preferredWeather: 'Frost Night', mutationChance: 0.095, description: 'Thrives when ordinary crops slow down.', category: 'Weather' },
+  { id: 'stormroot', name: 'Stormroot', rarity: 'Epic', buyPrice: 135, baseSellPrice: 460, stockChance: 0.16, minStock: 1, maxStock: 1, growTime: 78000, stages: 5, color: 0x7b2cbf, icon: '⛈️', preferredWeather: 'Thunderstorm', mutationChance: 0.13, description: 'Charged roots grow quickly in storms.', category: 'Weather' },
+  { id: 'mooncapMushroom', name: 'Mooncap Mushroom', rarity: 'Epic', buyPrice: 145, baseSellPrice: 500, stockChance: 0.15, minStock: 1, maxStock: 1, growTime: 76000, stages: 4, color: 0xcdb4db, icon: '🍄', preferredWeather: 'Frost Night', mutationChance: 0.14, description: 'A night-loving mushroom with cold bonuses.', category: 'Weather' },
+  { id: 'rainbowCarrot', name: 'Rainbow Carrot', rarity: 'Legendary', buyPrice: 260, baseSellPrice: 1000, stockChance: 0.08, minStock: 1, maxStock: 1, growTime: 105000, stages: 5, color: 0xff5fd2, icon: '🌈', preferredWeather: 'Bee Swarm', mutationChance: 0.18, description: 'A mutation-prone carrot with wild color.', category: 'Mutation' },
+  { id: 'giantTomato', name: 'Giant Tomato', rarity: 'Legendary', buyPrice: 300, baseSellPrice: 1160, stockChance: 0.07, minStock: 1, maxStock: 1, growTime: 112000, stages: 5, color: 0xd00000, icon: '🍅', preferredWeather: 'Rain', mutationChance: 0.16, description: 'Huge crop, huge target, huge payout.', category: 'Mutation' },
+  { id: 'goldenPumpkin', name: 'Golden Pumpkin', rarity: 'Legendary', buyPrice: 360, baseSellPrice: 1350, stockChance: 0.06, minStock: 1, maxStock: 1, growTime: 118000, stages: 5, color: 0xffc300, icon: '🏆', preferredWeather: 'Golden Hour', mutationChance: 0.18, description: 'A glittering pumpkin that announces wealth.', category: 'Mutation' },
+  { id: 'crystalBlueberry', name: 'Crystal Blueberry', rarity: 'Legendary', buyPrice: 330, baseSellPrice: 1240, stockChance: 0.065, minStock: 1, maxStock: 1, growTime: 110000, stages: 5, color: 0x72ddf7, icon: '🔷', preferredWeather: 'Meteor Shower', mutationChance: 0.2, description: 'A gem-bright berry that loves meteor dust.', category: 'Mutation' },
+  { id: 'shadowDragonfruit', name: 'Shadow Dragonfruit', rarity: 'Mythic', buyPrice: 550, baseSellPrice: 2400, stockChance: 0.025, minStock: 1, maxStock: 1, growTime: 155000, stages: 5, color: 0x3a0ca3, icon: '🌑', preferredWeather: 'Fog', mutationChance: 0.22, description: 'Extremely rare and excellent for thieves.', category: 'Mutation' },
+  { id: 'kingCrop', name: 'King Crop', rarity: 'Mythic', buyPrice: 800, baseSellPrice: 3800, stockChance: 0.018, minStock: 1, maxStock: 1, growTime: 210000, stages: 5, color: 0xf4d35e, icon: '👑', preferredWeather: 'Golden Hour', mutationChance: 0.25, description: 'Server-famous crop, painfully slow and valuable.', category: 'Competition' },
+  { id: 'loudBloom', name: 'Loud Bloom', rarity: 'Legendary', buyPrice: 380, baseSellPrice: 1500, stockChance: 0.055, minStock: 1, maxStock: 1, growTime: 120000, stages: 5, color: 0xff70a6, icon: '📣', preferredWeather: 'Bee Swarm', mutationChance: 0.17, description: 'Alerts the garden when it reaches full bloom.', category: 'Competition' },
+  { id: 'thiefVine', name: 'Thief Vine', rarity: 'Epic', buyPrice: 160, baseSellPrice: 520, stockChance: 0.13, minStock: 1, maxStock: 1, growTime: 78000, stages: 5, color: 0x386641, icon: '🛡️', preferredWeather: 'Fog', mutationChance: 0.1, description: 'Protects nearby crops slightly from thieves.', category: 'Competition' },
+  { id: 'bountyFruit', name: 'Bounty Fruit', rarity: 'Legendary', buyPrice: 420, baseSellPrice: 1600, stockChance: 0.05, minStock: 1, maxStock: 1, growTime: 128000, stages: 5, color: 0xffb703, icon: '💰', preferredWeather: 'Market Boom', mutationChance: 0.16, description: 'Bonus value during server events.', category: 'Competition' },
+  { id: 'meteorSeed', name: 'Meteor Seed', rarity: 'Mythic', buyPrice: 650, baseSellPrice: 3100, stockChance: 0.01, minStock: 1, maxStock: 1, growTime: 180000, stages: 5, color: 0xff4800, icon: '☄️', preferredWeather: 'Meteor Shower', mutationChance: 0.28, description: 'A strange seed that appears during meteor showers.', category: 'Event' },
+];
+
+const requestedSeedIds = new Set(SEED_DATABASE.map(seed => seed.id));
+for (const key of Object.keys(SEED_CATALOG)) {
+  if (!requestedSeedIds.has(key)) delete SEED_CATALOG[key];
+}
+for (const seed of SEED_DATABASE) {
+  const rarity = RARITY_CONFIG[seed.rarity] || RARITY_CONFIG.Common;
+  SEED_CATALOG[seed.id] = {
+    ...seed,
+    rarityRank: rarity.rank,
+    rarityColor: rarity.border,
+    baseSellPrice: Math.round(seed.baseSellPrice * rarity.sellMultiplier),
+    stockChance: Math.max(0.01, Math.min(0.98, seed.stockChance * rarity.stockMultiplier)),
+    growTime: Math.round(seed.growTime * rarity.growMultiplier),
+    mutationChance: Math.max(0, Math.min(0.9, seed.mutationChance + rarity.mutationBonus)),
+  };
+}
+
 const STARTING_MONEY  = 100;
 const STARTING_SEEDS  = { carrot: 3, tomato: 1 };
 const MUTATION_CHANCE = 0.05; // 5% chance double value on harvest
@@ -145,6 +212,24 @@ const WEAPON_CATALOG = {
   minigun: GEAR_CATALOG.minigun,
 };
 
+const WEATHER_DURATION_MS = 180_000;
+const WEATHER_EVENTS = [
+  { name: 'Rain', description: 'All crops grow faster. Rain Lily surges.', growMultiplier: 1.25, mutationBonus: 0.01 },
+  { name: 'Heatwave', description: 'Some crops slow down, but fiery crops sell high.', growMultiplier: 0.9, sellBoosts: { sunburstCorn: 1.35, emberPepper: 1.45 }, mutationBonus: 0 },
+  { name: 'Thunderstorm', description: 'Storm crops grow fast and charged mutations can appear.', growMultiplier: 1.05, preferredGrowBoost: { stormroot: 1.65 }, mutationBonus: 0.04 },
+  { name: 'Fog', description: 'Visibility drops and stealing is easier.', growMultiplier: 1.0, mutationBonus: 0.015 },
+  { name: 'Golden Hour', description: 'Sell prices rise temporarily.', growMultiplier: 1.05, sellMultiplier: 1.25, mutationBonus: 0.015 },
+  { name: 'Meteor Shower', description: 'Meteor seeds and fertilizer can appear around the map.', growMultiplier: 1.0, stockBoosts: { meteorSeed: 0.22, crystalMelon: 0.12, crystalBlueberry: 0.12 }, mutationBonus: 0.05 },
+  { name: 'Bee Swarm', description: 'Mutation chances rise across the server.', growMultiplier: 1.1, mutationBonus: 0.08 },
+  { name: 'Frost Night', description: 'Normal crops slow down, cold crops become valuable.', growMultiplier: 0.82, sellBoosts: { frostBerry: 1.5, mooncapMushroom: 1.35 }, mutationBonus: 0.025 },
+  { name: 'Market Crash', description: 'Common crop sell prices drop and rare crops matter more.', growMultiplier: 1.0, sellMultiplier: 0.85, rareSellMultiplier: 1.18, mutationBonus: 0 },
+  { name: 'Market Boom', description: 'Sell prices rise. Harvest and sell fast.', growMultiplier: 1.0, sellMultiplier: 1.35, mutationBonus: 0.01 },
+];
+let weatherIndex = 0;
+let currentWeather = WEATHER_EVENTS[weatherIndex];
+let nextWeather = WEATHER_EVENTS[(weatherIndex + 1) % WEATHER_EVENTS.length];
+let weatherEndsAt = Date.now() + WEATHER_DURATION_MS;
+
 // Garden expansion levels: level 0 = 3x3, level 1 = 4x4, etc.
 const EXPANSION_COSTS = [500, 1000, 5000, 10000]; // costs for levels 1-4
 const GRID_SIZES = [3, 4, 5, 6]; // grid sizes for levels 0-3
@@ -154,6 +239,7 @@ let cropPrices = {};
 let restockCount = 0;
 const RESTOCK_MS = 180_000; // every 3 minutes
 const PRICE_UPDATE_EVERY = 3; // update prices every 3 restocks
+let nextRestockAt = Date.now() + RESTOCK_MS;
 
 function initializeCropPrices() {
   cropPrices = {};
@@ -163,6 +249,7 @@ function initializeCropPrices() {
       currentSellPrice: info.baseSellPrice,
       previousSellPrice: info.baseSellPrice,
       trend: 'neutral',
+      trendPercent: 0,
     };
   }
 }
@@ -213,10 +300,56 @@ function getShopStock() {
   return stock;
 }
 
+function updateCropPrices() {
+  for (const [key, priceInfo] of Object.entries(cropPrices)) {
+    const seed = SEED_CATALOG[key];
+    priceInfo.previousSellPrice = priceInfo.currentSellPrice;
+    const swing = 0.12 + ((seed?.rarityRank || 1) * 0.025);
+    const change = (Math.random() - 0.5) * swing * 2;
+    const newPrice = Math.round(priceInfo.baseSellPrice * (1 + change) * getWeatherSellMultiplier(key));
+    priceInfo.currentSellPrice = Math.max(1, newPrice);
+    if (priceInfo.currentSellPrice > priceInfo.previousSellPrice) {
+      priceInfo.trend = 'up';
+    } else if (priceInfo.currentSellPrice < priceInfo.previousSellPrice) {
+      priceInfo.trend = 'down';
+    } else {
+      priceInfo.trend = 'neutral';
+    }
+    priceInfo.trendPercent = priceInfo.previousSellPrice
+      ? Math.round(((priceInfo.currentSellPrice - priceInfo.previousSellPrice) / priceInfo.previousSellPrice) * 100)
+      : 0;
+  }
+}
+
+function cropPricesForWelcome() {
+  const prices = {};
+  for (const [key, info] of Object.entries(cropPrices)) {
+    prices[key] = { ...info };
+  }
+  return prices;
+}
+
+function getShopStock() {
+  const stock = {};
+  for (const [key, info] of Object.entries(SEED_CATALOG)) {
+    const eventBoost = currentWeather.stockBoosts?.[key] || 0;
+    const chance = Math.min(0.98, info.stockChance + eventBoost);
+    if (Math.random() >= chance) {
+      stock[key] = 0;
+      continue;
+    }
+    const minStock = info.minStock ?? 1;
+    const maxStock = Math.max(minStock, info.maxStock ?? minStock);
+    stock[key] = minStock + Math.floor(Math.random() * (maxStock - minStock + 1));
+  }
+  return stock;
+}
+
 let currentShopStock = getShopStock();
 
 function restock() {
   restockCount++;
+  nextRestockAt = Date.now() + RESTOCK_MS;
   currentShopStock = getShopStock();
   
   if (restockCount % PRICE_UPDATE_EVERY === 0) {
@@ -225,12 +358,64 @@ function restock() {
     console.log(`[shop] crop prices updated (restock ${restockCount})`);
   }
   
-  broadcast({ type: 'shopRestocked', stock: currentShopStock, restockCount });
+  broadcast({ type: 'shopRestocked', stock: currentShopStock, restockCount, nextRestockAt });
   console.log(`[shop] restocked #${restockCount}`);
 }
 
 initializeCropPrices();
 setInterval(restock, RESTOCK_MS);
+setInterval(rotateWeather, WEATHER_DURATION_MS);
+
+function rotateWeather() {
+  weatherIndex = (weatherIndex + 1) % WEATHER_EVENTS.length;
+  currentWeather = WEATHER_EVENTS[weatherIndex];
+  nextWeather = WEATHER_EVENTS[(weatherIndex + 1) % WEATHER_EVENTS.length];
+  weatherEndsAt = Date.now() + WEATHER_DURATION_MS;
+  updateCropPrices();
+  currentShopStock = getShopStock();
+  broadcast({ type: 'weatherChanged', weather: getWeatherState() });
+  broadcast({ type: 'cropPricesChanged', prices: cropPrices, restockCount, weather: getWeatherState() });
+  broadcast({ type: 'shopRestocked', stock: currentShopStock, restockCount, nextRestockAt });
+  broadcast({ type: 'worldEvent', message: `${currentWeather.name} has started! ${currentWeather.description}`, event: currentWeather.name });
+}
+
+function getWeatherState() {
+  return {
+    current: currentWeather.name,
+    description: currentWeather.description,
+    endsAt: weatherEndsAt,
+    timeRemainingMs: Math.max(0, weatherEndsAt - Date.now()),
+    next: nextWeather.name,
+  };
+}
+
+function getWeatherGrowMultiplier(seedType) {
+  const seed = SEED_CATALOG[seedType];
+  let multiplier = currentWeather.growMultiplier || 1;
+  if (seed?.preferredWeather === currentWeather.name) multiplier *= 1.45;
+  if (currentWeather.preferredGrowBoost?.[seedType]) multiplier *= currentWeather.preferredGrowBoost[seedType];
+  if (currentWeather.name === 'Rain' && seedType === 'rainLily') multiplier *= 1.6;
+  if (currentWeather.name === 'Frost Night' && !['frostBerry', 'mooncapMushroom'].includes(seedType)) multiplier *= 0.82;
+  return Math.max(0.35, multiplier);
+}
+
+function getWeatherSellMultiplier(seedType) {
+  const seed = SEED_CATALOG[seedType];
+  let multiplier = currentWeather.sellMultiplier || 1;
+  if (currentWeather.sellBoosts?.[seedType]) multiplier *= currentWeather.sellBoosts[seedType];
+  if (currentWeather.name === 'Market Crash' && seed?.rarity === 'Common') multiplier *= 0.7;
+  if (currentWeather.name === 'Market Crash' && (seed?.rarityRank || 1) >= 3) multiplier *= currentWeather.rareSellMultiplier || 1;
+  if (seed?.preferredWeather === currentWeather.name) multiplier *= 1.08;
+  return multiplier;
+}
+
+function getWeatherMutationBonus(seedType) {
+  const seed = SEED_CATALOG[seedType];
+  let bonus = currentWeather.mutationBonus || 0;
+  if (seed?.preferredWeather === currentWeather.name) bonus += 0.035;
+  if (currentWeather.name === 'Thunderstorm' && ['tomato', 'pepper', 'stormroot'].includes(seedType)) bonus += 0.06;
+  return bonus;
+}
 
 // ─── Player Store ─────────────────────────────────────────────────────────────
 const players = new Map(); // playerId → playerState
@@ -270,6 +455,20 @@ function createPlayer(id, slotIndex = 0) {
     plotOrigin,
     position: getSpawnPosition(plotOrigin),
     holdingStolen: null,
+    protectedUntil: Date.now() + 60_000,
+    progression: {
+      level: 1,
+      xp: 0,
+      season: 'Spring',
+      achievements: {},
+      collection: { crops: {}, mutations: {}, weatherVariants: {}, giantCrops: 0, eventCrops: {} },
+      quests: [
+        { id: 'harvest-5', label: 'Harvest 5 crops', progress: 0, target: 5 },
+        { id: 'shop-2', label: 'Buy from the shop twice', progress: 0, target: 2 },
+      ],
+      mastery: {},
+      stats: { harvests: 0, steals: 0, rareFinds: 0, biggestHarvest: 0 },
+    },
     activeBoosts: [],
     plots,
     expansionLevel: 0, // 0 = 3x3, 1 = 4x4, 2 = 5x5, 3 = 6x6
@@ -293,6 +492,8 @@ function getPlayerPublic(player) {
     plotOrigin: player.plotOrigin,
     position: player.position,
     holdingStolen: player.holdingStolen,
+    protectedUntil: player.protectedUntil,
+    progression: player.progression,
     expansionLevel: player.expansionLevel,
     gridSize: GRID_SIZES[player.expansionLevel],
     plots: player.plots.map(plot => ({
@@ -302,13 +503,13 @@ function getPlayerPublic(player) {
       originZ: player.plotOrigin.z,
       cells: plot.cells.map(cell => {
         if (!cell.plant) return { row: cell.row, col: cell.col, plant: null };
-        const { seedType, stage, mutated, plantedAt, growTime } = cell.plant;
+        const { seedType, stage, mutated, mutationName, quality, plantedAt, growTime } = cell.plant;
         const elapsed = Date.now() - plantedAt;
-        const progress = Math.min(elapsed / growTime, 1);
+        const progress = Math.min((elapsed * getWeatherGrowMultiplier(seedType)) / growTime, 1);
         return {
           row: cell.row,
           col: cell.col,
-          plant: { seedType, stage, mutated, progress },
+          plant: { seedType, stage, mutated, mutationName, quality, progress },
         };
       }),
     })),
@@ -328,14 +529,26 @@ setInterval(() => {
         if (boost) {
           cell.plant.plantedAt -= BOOST_TICK_MS * (boost.speedMultiplier - 1);
         }
-        const { plantedAt, growTime, stage } = cell.plant;
-        const maxStages = SEED_CATALOG[cell.plant.seedType]?.stages ?? 4;
+        const { plantedAt, growTime, stage, seedType } = cell.plant;
+        const seedInfo = SEED_CATALOG[seedType];
+        const maxStages = seedInfo?.stages ?? 4;
+        const effectiveGrowTime = growTime / getWeatherGrowMultiplier(seedType);
         const targetStage = Math.min(
-          Math.floor(((Date.now() - plantedAt) / growTime) * maxStages),
+          Math.floor(((Date.now() - plantedAt) / effectiveGrowTime) * maxStages),
           maxStages - 1
         );
         if (targetStage !== stage) {
           cell.plant.stage = targetStage;
+          anyChanged = true;
+        }
+        if (targetStage >= maxStages - 1 && !cell.plant.quality) {
+          const result = rollCropFinish(seedType);
+          cell.plant.quality = result.quality;
+          cell.plant.mutated = !!result.mutationName;
+          cell.plant.mutationName = result.mutationName;
+          if (['loudBloom', 'kingCrop', 'meteorSeed'].includes(seedType)) {
+            broadcast({ type: 'worldEvent', message: `${seedInfo.name} is ready in ${player.id}'s garden!`, event: 'Rare Crop Ready' });
+          }
           anyChanged = true;
         }
       }
@@ -357,6 +570,38 @@ function getActiveBoost(player, row, col, now = Date.now()) {
       && row < boost.row + boost.size
       && col < boost.col + boost.size
   );
+}
+
+function rollCropFinish(seedType) {
+  const seed = SEED_CATALOG[seedType] || {};
+  const qualityRoll = Math.random();
+  let quality = 'Normal';
+  if (qualityRoll > 0.985) quality = 'Giant';
+  else if (qualityRoll > 0.955) quality = 'Rainbow';
+  else if (qualityRoll > 0.88) quality = 'Gold';
+  else if (qualityRoll > 0.68) quality = 'Silver';
+
+  const mutationChance = Math.min(0.85, (seed.mutationChance ?? MUTATION_CHANCE) + getWeatherMutationBonus(seedType));
+  const mutationName = Math.random() < mutationChance ? mutationFor(seedType) : null;
+  return { quality, mutationName };
+}
+
+function mutationFor(seedType) {
+  if (currentWeather.name === 'Thunderstorm' && seedType === 'tomato') return 'Storm Tomato';
+  if (currentWeather.name === 'Thunderstorm' && seedType === 'pepper') return 'Lightning Pepper';
+  const names = {
+    carrot: 'Rainbow Carrot',
+    tomato: 'Giant Tomato',
+    pumpkin: 'Golden Pumpkin',
+    blueberry: 'Crystal Blueberry',
+    dragonfruit: 'Shadow Dragonfruit',
+    rainbowCarrot: 'Rainbow Carrot',
+    giantTomato: 'Giant Tomato',
+    goldenPumpkin: 'Golden Pumpkin',
+    crystalBlueberry: 'Crystal Blueberry',
+    shadowDragonfruit: 'Shadow Dragonfruit',
+  };
+  return names[seedType] || `${SEED_CATALOG[seedType]?.name || 'Crop'} Mutation`;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -403,7 +648,9 @@ wss.on('connection', (ws) => {
       gearCatalog: GEAR_CATALOG,
       weaponCatalog: WEAPON_CATALOG,
       restockCount,
+      nextRestockAt,
     },
+    weather: getWeatherState(),
     allGardens: [...players.values()].map(getPlayerPublic),
   });
 
@@ -450,7 +697,7 @@ function handleMessage(player, msg) {
       currentShopStock[seedType] -= qty;
       
       sendState(player);
-      broadcast({ type: 'shopRestocked', stock: currentShopStock });
+      broadcast({ type: 'shopRestocked', stock: currentShopStock, restockCount, nextRestockAt });
       break;
     }
 
@@ -539,7 +786,9 @@ function handleMessage(player, msg) {
         stage: 0,
         plantedAt: Date.now(),
         growTime: SEED_CATALOG[seedType].growTime,
-        mutated: Math.random() < MUTATION_CHANCE,
+        mutated: false,
+        quality: null,
+        mutationName: null,
       };
       sendState(player);
       broadcastAllGardens();
@@ -556,11 +805,10 @@ function handleMessage(player, msg) {
       const maxStages = SEED_CATALOG[cell.plant.seedType]?.stages ?? 4;
       if (cell.plant.stage < maxStages - 1) return sendError(player, 'Plant not ready yet');
 
-      const { seedType, mutated } = cell.plant;
+      const { seedType, quality, mutationName } = cell.plant;
       cell.plant = null;
-      if (!player.crops[seedType]) player.crops[seedType] = { normal: 0, mutated: 0 };
-      if (mutated) player.crops[seedType].mutated++;
-      else player.crops[seedType].normal++;
+      addCrop(player, seedType, quality, mutationName);
+      send(player.ws, { type: 'harvestPopup', seedType, quality: quality || 'Normal', mutationName });
       sendState(player);
       broadcastAllGardens();
       break;
@@ -572,15 +820,16 @@ function handleMessage(player, msg) {
       if (ownerId === player.id) return sendError(player, 'Use harvest mode on your own garden to harvest');
       const owner = players.get(ownerId);
       if (!owner) return sendError(player, 'That player is no longer online');
+      if ((owner.protectedUntil || 0) > Date.now()) return sendError(player, 'That garden is protected');
       const plot = owner.plots[plotId];
       if (!plot) return sendError(player, 'Invalid target plot');
       const cell = plot.cells.find(c => c.row === cellRow && c.col === cellCol);
       if (!cell || !cell.plant) return sendError(player, 'Nothing to steal');
       const maxStages = SEED_CATALOG[cell.plant.seedType]?.stages ?? 4;
       if (cell.plant.stage < maxStages - 1) return sendError(player, 'That crop is not ready yet');
-      const { seedType, mutated } = cell.plant;
+      const { seedType, quality, mutationName } = cell.plant;
       cell.plant = null;
-      player.holdingStolen = { ownerId, seedType, mutated: !!mutated };
+      player.holdingStolen = { ownerId, seedType, quality: quality || 'Normal', mutationName };
       sendState(player);
       sendState(owner);
       broadcast({ type: 'cropStolen', thiefId: player.id, ownerId, seedType });
@@ -626,11 +875,8 @@ function handleMessage(player, msg) {
       for (const [seedType, cropStack] of Object.entries(player.crops)) {
         const priceInfo = cropPrices[seedType];
         if (!priceInfo) continue;
-        const normal = typeof cropStack === 'number' ? cropStack : cropStack.normal || 0;
-        const mutated = typeof cropStack === 'number' ? 0 : cropStack.mutated || 0;
-        earned += priceInfo.currentSellPrice * normal;
-        earned += priceInfo.currentSellPrice * MUTATION_MULTIPLIER * mutated;
-        player.crops[seedType] = { normal: 0, mutated: 0 };
+        earned += Math.round(cropStackValue(cropStack, priceInfo.currentSellPrice));
+        player.crops[seedType] = emptyCropStack();
       }
       player.money += earned;
       send(player.ws, { type: 'sold', earned });
@@ -673,10 +919,8 @@ function updatePlayerPosition(player, msg) {
 function maybeDepositStolenCrop(player) {
   if (!player.holdingStolen) return;
   if (distance(player.position, getSpawnPosition(player.plotOrigin)) > 4) return;
-  const { seedType, mutated } = player.holdingStolen;
-  if (!player.crops[seedType]) player.crops[seedType] = { normal: 0, mutated: 0 };
-  if (mutated) player.crops[seedType].mutated++;
-  else player.crops[seedType].normal++;
+  const { seedType, quality, mutationName } = player.holdingStolen;
+  addCrop(player, seedType, quality, mutationName);
   player.holdingStolen = null;
   send(player.ws, { type: 'stolenDeposited', seedType });
   sendState(player);
@@ -714,13 +958,38 @@ function returnHeldCrop(player) {
   if (!player.holdingStolen) return;
   const owner = players.get(player.holdingStolen.ownerId);
   if (owner) {
-    const { seedType, mutated } = player.holdingStolen;
-    if (!owner.crops[seedType]) owner.crops[seedType] = { normal: 0, mutated: 0 };
-    if (mutated) owner.crops[seedType].mutated++;
-    else owner.crops[seedType].normal++;
+    const { seedType, quality, mutationName } = player.holdingStolen;
+    addCrop(owner, seedType, quality, mutationName);
     sendState(owner);
   }
   player.holdingStolen = null;
+}
+
+function emptyCropStack() {
+  return { normal: 0, silver: 0, gold: 0, rainbow: 0, giant: 0, mutated: 0 };
+}
+
+function addCrop(player, seedType, quality = 'Normal', mutationName = null) {
+  if (!player.crops[seedType]) player.crops[seedType] = emptyCropStack();
+  const stack = player.crops[seedType];
+  if (mutationName) stack.mutated = (stack.mutated || 0) + 1;
+  else if (quality === 'Giant') stack.giant = (stack.giant || 0) + 1;
+  else if (quality === 'Rainbow') stack.rainbow = (stack.rainbow || 0) + 1;
+  else if (quality === 'Gold') stack.gold = (stack.gold || 0) + 1;
+  else if (quality === 'Silver') stack.silver = (stack.silver || 0) + 1;
+  else stack.normal = (stack.normal || 0) + 1;
+}
+
+function cropStackValue(cropStack, sellPrice) {
+  if (typeof cropStack === 'number') return sellPrice * cropStack;
+  return sellPrice * (
+    (cropStack.normal || 0)
+    + (cropStack.silver || 0) * 1.25
+    + (cropStack.gold || 0) * 1.6
+    + (cropStack.rainbow || 0) * 2.25
+    + (cropStack.giant || 0) * 2.75
+    + (cropStack.mutated || 0) * MUTATION_MULTIPLIER
+  );
 }
 
 function distance(a, b) {

@@ -423,3 +423,294 @@ body {
 
 @keyframes toast-in  { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 @keyframes toast-out { from { opacity: 1; } to   { opacity: 0; } }
+
+/* Gameplay expansion UI */
+#hint-bar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-width: min(520px, calc(100vw - 24px));
+  color: rgba(245, 240, 232, 0.82);
+  background: rgba(18, 28, 25, 0.62);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+#top-bar {
+  gap: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+#weather-panel {
+  color: var(--cream);
+  font-size: 13px;
+}
+
+#weather-time {
+  color: rgba(245, 240, 232, 0.68);
+  margin-left: 4px;
+}
+
+#inventory-panel {
+  position: absolute;
+  left: 14px;
+  bottom: 18px;
+  width: min(360px, calc(100vw - 28px));
+  display: grid;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.inventory-section,
+#selected-seed-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: rgba(15, 35, 25, 0.9);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: var(--cream);
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.inventory-section strong {
+  color: var(--gold);
+  margin-right: 4px;
+}
+
+#selected-seed-card {
+  border-color: var(--rarity-color, var(--ui-border));
+  display: grid;
+  grid-template-columns: auto 1fr;
+}
+
+#selected-seed-card small {
+  grid-column: 2;
+  color: rgba(245, 240, 232, 0.68);
+}
+
+#hotbar {
+  bottom: 26px;
+}
+
+.seed-icon {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  font-size: 17px;
+}
+
+.seed-icon.large {
+  min-width: 38px;
+  height: 38px;
+  font-size: 30px;
+}
+
+.modal-inner {
+  border-radius: 8px;
+}
+
+.shop-modal-inner {
+  width: min(1120px, calc(100vw - 32px));
+  max-height: min(84vh, 820px);
+}
+
+.shop-title-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-close.compact {
+  margin-top: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 12px;
+}
+
+.segmented button {
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: var(--cream);
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.segmented button.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  gap: 14px;
+}
+
+.shop-columns,
+.shop-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.25fr) 110px 76px 76px 82px 92px 112px;
+  gap: 8px;
+  align-items: center;
+}
+
+.shop-columns {
+  color: rgba(245, 240, 232, 0.58);
+  font-size: 11px;
+  padding: 0 10px 6px;
+}
+
+.shop-row {
+  margin-bottom: 6px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-left: 4px solid var(--rarity-color, var(--ui-border));
+  border-radius: 8px;
+  background: rgba(255,255,255,0.045);
+}
+
+.shop-row:hover,
+.shop-row.selected {
+  background: rgba(255,255,255,0.08);
+}
+
+.shop-row.out-of-stock {
+  opacity: 0.48;
+}
+
+.seed-name {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px;
+  align-items: center;
+}
+
+.seed-name small {
+  grid-column: 2;
+  color: var(--rarity-color, rgba(245,240,232,0.65));
+}
+
+.profit.positive,
+.positive {
+  color: #72e08a;
+}
+
+.profit.negative,
+.negative {
+  color: #ff7b8a;
+}
+
+.seed-info-card {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  min-height: 260px;
+  border: 1px solid var(--rarity-color, rgba(255,255,255,0.16));
+  border-radius: 8px;
+  background: rgba(255,255,255,0.055);
+  padding: 12px;
+  color: var(--cream);
+}
+
+.info-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.info-title small,
+.seed-info-card p {
+  color: rgba(245, 240, 232, 0.68);
+}
+
+.seed-info-card dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.seed-info-card dt {
+  color: rgba(245, 240, 232, 0.62);
+}
+
+.gear-shop-row,
+.sell-row {
+  border-radius: 8px;
+  padding-inline: 10px;
+}
+
+#toast-stack {
+  position: fixed;
+  right: 18px;
+  bottom: 86px;
+  display: grid;
+  gap: 8px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+#toast-stack .toast {
+  position: static;
+  transform: none;
+  border-radius: 8px;
+  animation: toast-stack-in 0.18s ease, toast-out 0.4s ease 3.1s forwards;
+  max-width: min(360px, calc(100vw - 36px));
+}
+
+#fog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(210, 220, 220, 0.18);
+  backdrop-filter: blur(1px);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.holding.shield {
+  border-color: #80f7ff;
+  color: #bde0fe;
+}
+
+@keyframes toast-stack-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (max-width: 820px) {
+  #top-bar {
+    top: 42px;
+    max-width: calc(100vw - 18px);
+    overflow-x: auto;
+  }
+
+  .shop-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .shop-columns {
+    display: none;
+  }
+
+  .shop-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
