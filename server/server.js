@@ -114,6 +114,7 @@ const MUTATION_MULTIPLIER = 2; // mutated crops sell for 2x
 const MAX_HEALTH = 100;
 const BOOST_TICK_MS = 2000;
 const PLOT_SPACING = 18;
+const POSITION_SYNC_MS = 100;
 
 // Make every plant seed at least 2x more expensive than the old economy.
 for (const info of Object.values(SEED_CATALOG)) {
@@ -422,6 +423,11 @@ function handleMessage(player, msg) {
       player.position = { x: clamp(x, -150, 150), z: clamp(z, -150, 150) };
       maybeDepositStolenCrop(player);
       broadcast({ type: 'playerMoved', playerId: player.id, position: player.position, health: player.health, holdingStolen: player.holdingStolen });
+      const now = Date.now();
+      if (!player.lastPositionSyncAt || now - player.lastPositionSyncAt >= POSITION_SYNC_MS) {
+        player.lastPositionSyncAt = now;
+        broadcastAllGardens();
+      }
       break;
     }
 

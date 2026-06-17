@@ -44,6 +44,9 @@ export function updateOtherPlayers(scene, allGardens, myPlayerId) {
     entry.data = gData;
     entry.avatar.position.set(gData.position?.x ?? origin.x, 0, gData.position?.z ?? origin.z + 5);
     entry.label.textContent = `${gData.id} HP ${gData.health ?? 100}`;
+    if (entry.data?.position) {
+      entry.avatar.position.set(entry.data.position.x, 0, entry.data.position.z);
+    }
     entry.garden.update(gData.plots);
 
     for (const mesh of entry.garden.cellMap.keys()) {
