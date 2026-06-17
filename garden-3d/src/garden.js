@@ -28,7 +28,7 @@ export function cellWorldOffset(row, col, gridSize) {
   };
 }
 
-export function createGarden(scene, originX = 0, originZ = 0, gridSize = 3) {
+export function createGarden(scene, originX = 0, originZ = 0, gridSize = 3, options = {}) {
   const cellMap = new Map();
   const plantMeshes = {};
   const cellState = new Map();
@@ -40,6 +40,10 @@ export function createGarden(scene, originX = 0, originZ = 0, gridSize = 3) {
   const pad = new THREE.Mesh(padGeo, new THREE.MeshLambertMaterial({ color: PAD_COLOR }));
   pad.position.set(0, -0.07, 0);
   root.add(pad);
+
+  if (options.highlight) {
+    root.add(makePlotHighlight(gridSize));
+  }
 
   for (let row = 0; row < gridSize; row++) {
     for (let col = 0; col < gridSize; col++) {
@@ -89,6 +93,26 @@ export function createGarden(scene, originX = 0, originZ = 0, gridSize = 3) {
   }
 
   return { root, cellMap, update, dispose, getCellData, originX, originZ, gridSize };
+}
+
+function makePlotHighlight(gridSize) {
+  const size = gridSize * 1.2 + 0.42;
+  const thickness = 0.055;
+  const mat = new THREE.MeshBasicMaterial({ color: 0x75ff8a, transparent: true, opacity: 0.48 });
+  const group = new THREE.Group();
+  const horizontal = new THREE.BoxGeometry(size, 0.035, thickness);
+  const vertical = new THREE.BoxGeometry(thickness, 0.035, size);
+  [
+    [horizontal, 0, size / 2, 0],
+    [horizontal, 0, -size / 2, 0],
+    [vertical, size / 2, 0, 0],
+    [vertical, -size / 2, 0, 0],
+  ].forEach(([geo, x, z]) => {
+    const edge = new THREE.Mesh(geo, mat);
+    edge.position.set(x, 0.025, z);
+    group.add(edge);
+  });
+  return group;
 }
 
 function makePlantGroup(plant) {

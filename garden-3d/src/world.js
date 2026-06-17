@@ -91,17 +91,19 @@ export function createWorld(scene) {
   // Seed shop is to the left of the player's garden
   const seedShop = createBuilding(scene, -14, -2, 0x6b9e5e, 0x3d7a45, 'Seed Shop [E]');
   const gearShop = createBuilding(scene, 0, -14, 0x5b6fa6, 0x263b78, 'Gear Shop [E]');
+  const petShop = createBuilding(scene, -14, 8, 0x7c5fa8, 0xd08bff, 'Pet Shop [E]');
 
   // Sell stand is to the right
   const sellStand = createBuilding(scene, 14, -2, 0xcb8a3e, 0x9b5e1c, 'Sell Stand [E]');
   const weatherBoard = createBoard(scene, -6, -12, 0x203a5f, 'Weather Board');
   const leaderboard = createBoard(scene, 6, -12, 0x5f3b20, 'Leaderboard');
 
-  const buildings = [seedShop, gearShop, sellStand, weatherBoard, leaderboard];
+  const buildings = [seedShop, gearShop, petShop, sellStand, weatherBoard, leaderboard];
 
   return {
     seedShop,
     gearShop,
+    petShop,
     sellStand,
     weatherBoard,
     leaderboard,
@@ -144,6 +146,7 @@ function createDecorations(scene) {
     [0, -8, 1.2, 18],
     [-8, -2, 14, 1.0],
     [8, -2, 14, 1.0],
+    [-14, 3, 1.0, 11],
   ].forEach(([x, z, w, d]) => {
     const path = new THREE.Mesh(new THREE.BoxGeometry(w, 0.025, d), pathMat);
     path.position.set(x, -0.095, z);
@@ -163,6 +166,21 @@ function createDecorations(scene) {
 
   createScarecrow(scene, -4, 7);
   createScarecrow(scene, 14, 7);
+  createPond(scene, 10, 9);
+  createPond(scene, -20, -11);
+  createBench(scene, -8, -7, 0);
+  createBench(scene, 8, -7, Math.PI);
+  createCrateStack(scene, 18, 4);
+  createCrateStack(scene, -18, 3);
+  createFlowerBed(scene, -6, 2, 0xff70a6);
+  createFlowerBed(scene, 6, 2, 0x90e0ef);
+  createFlowerBed(scene, -13, 13, 0xd08bff);
+  for (let i = 0; i < 10; i++) {
+    createLamp(scene, -18 + i * 4, -8 + (i % 2) * 2);
+  }
+  for (let i = 0; i < 14; i++) {
+    createBush(scene, -28 + i * 4, 16 + Math.sin(i) * 1.2);
+  }
 }
 
 function createTree(scene, x, z) {
@@ -181,11 +199,11 @@ function createRock(scene, x, z) {
   scene.add(rock);
 }
 
-function createFlower(scene, x, z) {
+function createFlower(scene, x, z, forcedColor = null) {
   const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.35, 5), new THREE.MeshLambertMaterial({ color: 0x2d6a4f }));
   stem.position.set(x, 0.18, z);
   scene.add(stem);
-  const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 4), new THREE.MeshLambertMaterial({ color: [0xff70a6, 0xffd166, 0x90e0ef][Math.floor(Math.random() * 3)] }));
+  const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 4), new THREE.MeshLambertMaterial({ color: forcedColor || [0xff70a6, 0xffd166, 0x90e0ef][Math.floor(Math.random() * 3)] }));
   bloom.position.set(x, 0.42, z);
   scene.add(bloom);
 }
@@ -208,6 +226,66 @@ function createScarecrow(scene, x, z) {
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), new THREE.MeshLambertMaterial({ color: 0xf2c14e }));
   head.position.set(x, 1.65, z);
   scene.add(head);
+}
+
+function createLamp(scene, x, z) {
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.2, 6), new THREE.MeshLambertMaterial({ color: 0x3a2a1a }));
+  pole.position.set(x, 0.6, z);
+  scene.add(pole);
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), new THREE.MeshLambertMaterial({ color: 0xfff0a8, emissive: 0xffd166, emissiveIntensity: 0.45 }));
+  glow.position.set(x, 1.28, z);
+  scene.add(glow);
+}
+
+function createPond(scene, x, z) {
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1.8, 28), new THREE.MeshLambertMaterial({ color: 0x3a8fb7, transparent: true, opacity: 0.72 }));
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(x, -0.085, z);
+  water.scale.set(1.35, 0.72, 1);
+  scene.add(water);
+  for (let i = 0; i < 6; i++) {
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), new THREE.MeshLambertMaterial({ color: 0x7d7d7d }));
+    const angle = (i / 6) * Math.PI * 2;
+    rock.position.set(x + Math.cos(angle) * 1.75, 0.02, z + Math.sin(angle) * 1.05);
+    scene.add(rock);
+  }
+}
+
+function createBench(scene, x, z, angle) {
+  const mat = new THREE.MeshLambertMaterial({ color: 0x8b5e3c });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.14, 0.44), mat);
+  seat.position.set(x, 0.32, z);
+  seat.rotation.y = angle;
+  scene.add(seat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.42, 0.12), mat);
+  back.position.set(x, 0.56, z - Math.cos(angle) * 0.28);
+  back.rotation.y = angle;
+  scene.add(back);
+}
+
+function createCrateStack(scene, x, z) {
+  const mat = new THREE.MeshLambertMaterial({ color: 0x8a5428 });
+  for (let i = 0; i < 4; i++) {
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), mat);
+    crate.position.set(x + (i % 2) * 0.58, 0.22 + Math.floor(i / 2) * 0.55, z + (i % 2) * 0.12);
+    scene.add(crate);
+  }
+}
+
+function createFlowerBed(scene, x, z, color) {
+  const soil = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 0.62), new THREE.MeshLambertMaterial({ color: 0x6b3f1d }));
+  soil.position.set(x, -0.03, z);
+  scene.add(soil);
+  for (let i = 0; i < 7; i++) {
+    createFlower(scene, x - 0.9 + i * 0.3, z + (i % 2) * 0.18 - 0.09, color);
+  }
+}
+
+function createBush(scene, x, z) {
+  const bush = new THREE.Mesh(new THREE.DodecahedronGeometry(0.48, 1), new THREE.MeshLambertMaterial({ color: 0x2f7d32 }));
+  bush.position.set(x, 0.34, z);
+  bush.scale.set(1.35, 0.75, 1);
+  scene.add(bush);
 }
 
 /**

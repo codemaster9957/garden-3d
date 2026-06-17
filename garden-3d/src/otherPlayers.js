@@ -46,6 +46,8 @@ export function updateOtherPlayers(scene, allGardens, myPlayerId) {
     entry.data = gData;
     moveAvatar(entry.avatar, gData.position?.x ?? origin.x, gData.position?.z ?? origin.z + 5);
     setAvatarHeldItem(entry.avatar, gData.holdingStolen);
+    setAvatarPet(entry.avatar, gData.activePet);
+    applyAvatarCombat(entry.avatar, gData.combat || gData);
     entry.label.textContent = `${gData.id} HP ${gData.health ?? 100}`;
     entry.garden.update(gData.plots);
 
@@ -83,7 +85,7 @@ export function getNearestOtherPlayer(x, z, maxDistance = 12) {
   return best;
 }
 
-export function updateRemotePlayerMove(playerId, position, health, holdingStolen) {
+export function updateRemotePlayerMove(playerId, position, health, holdingStolen, combat = null, activePet = undefined) {
   const entry = others.get(playerId);
   if (!entry) return;
   entry.data = {
@@ -91,9 +93,13 @@ export function updateRemotePlayerMove(playerId, position, health, holdingStolen
     position,
     health: health ?? entry.data?.health,
     holdingStolen: holdingStolen === undefined ? entry.data?.holdingStolen : holdingStolen,
+    activePet: activePet === undefined ? entry.data?.activePet : activePet,
+    combat: combat || entry.data?.combat,
   };
   moveAvatar(entry.avatar, position.x, position.z);
   setAvatarHeldItem(entry.avatar, entry.data.holdingStolen);
+  setAvatarPet(entry.avatar, entry.data.activePet);
+  applyAvatarCombat(entry.avatar, entry.data.combat);
   entry.label.textContent = `${playerId} HP ${entry.data.health ?? 100}`;
 }
 
@@ -138,10 +144,47 @@ function createRemoteAvatar(scene, playerId) {
 function moveAvatar(avatar, x, z) {
   const dx = x - avatar.position.x;
   const dz = z - avatar.position.z;
-  if (Math.abs(dx) + Math.abs(dz) > 0.01) {
+  if (!avatar.userData.gunEquipped && Math.abs(dx) + Math.abs(dz) > 0.01) {
     avatar.rotation.y = Math.atan2(dx, dz);
   }
   avatar.position.set(x, 0, z);
+}
+
+function applyAvatarCombat(avatar, combat = {}) {
+  const gunEquipped = !!combat?.gunEquipped;
+  avatar.userData.gunEquipped = gunEquipped;
+  if (Number.isFinite(combat?.aimAngle)) avatar.rotation.y = combat.aimAngle;
+  setAvatarGun(avatar, gunEquipped, combat?.activeWeapon || 'pistol');
+}
+
+function setAvatarGun(avatar, equipped, weaponType) {
+  const nextKey = equipped ? weaponType : '';
+  if (avatar.userData.gunKey === nextKey) return;
+  avatar.userData.gunKey = nextKey;
+  if (avatar.userData.gunItem) {
+    avatar.remove(avatar.userData.gunItem);
+    disposeMeshGroup(avatar.userData.gunItem);
+    avatar.userData.gunItem = null;
+  }
+  if (!equipped) return;
+  const gun = makeGun(weaponType);
+  avatar.userData.gunItem = gun;
+  avatar.add(gun);
+}
+
+function setAvatarPet(avatar, petType) {
+  const nextKey = petType || '';
+  if (avatar.userData.petKey === nextKey) return;
+  avatar.userData.petKey = nextKey;
+  if (avatar.userData.petItem) {
+    avatar.remove(avatar.userData.petItem);
+    disposeMeshGroup(avatar.userData.petItem);
+    avatar.userData.petItem = null;
+  }
+  if (!petType) return;
+  const pet = makePet(petType);
+  avatar.userData.petItem = pet;
+  avatar.add(pet);
 }
 
 function setAvatarHeldItem(avatar, item) {
@@ -190,6 +233,49 @@ function makeHeldCrop(item) {
   ring.rotation.x = Math.PI / 2;
   group.add(ring);
 
+  return group;
+}
+
+function makeGun(weaponType) {
+  const group = new THREE.Group();
+  const dark = new THREE.MeshLambertMaterial({ color: 0x20242a });
+  const metal = new THREE.MeshLambertMaterial({ color: weaponType === 'minigun' ? 0x666c74 : 0x3b4652 });
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.2), dark);
+  stock.position.set(0.22, 0.84, 0.3);
+  group.add(stock);
+
+  const barrelLength = weaponType === 'shotgun' ? 0.72 : weaponType === 'minigun' ? 0.82 : 0.56;
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, barrelLength, 8), metal);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0.28, 0.9, 0.58);
+  group.add(barrel);
+
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.08), dark);
+  handle.position.set(0.23, 0.72, 0.35);
+  group.add(handle);
+  return group;
+}
+
+function makePet(petType) {
+  const colors = {
+    gardenBee: [0xffd166, 0x2f2518],
+    sproutPup: [0x9b6a3c, 0x52b788],
+    moonCat: [0x403d58, 0xcdb4db],
+    emberFox: [0xff7a33, 0xffd166],
+  }[petType] || [0xffffff, 0x52b788];
+  const group = new THREE.Group();
+  group.position.set(-0.78, 0, 0.38);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 7), new THREE.MeshLambertMaterial({ color: colors[0] }));
+  body.position.y = 0.32;
+  body.scale.set(1.15, 0.78, 0.92);
+  group.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshLambertMaterial({ color: colors[0] }));
+  head.position.set(0.16, 0.46, 0.08);
+  group.add(head);
+  const accent = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.32, 6), new THREE.MeshLambertMaterial({ color: colors[1] }));
+  accent.position.set(-0.22, 0.38, -0.03);
+  accent.rotation.z = Math.PI / 2.4;
+  group.add(accent);
   return group;
 }
 

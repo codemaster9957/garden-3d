@@ -15,7 +15,7 @@ const express = require('express');
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const SERVER_VERSION = 'visual-weather-stolen-2026-06-17-1';
+const SERVER_VERSION = 'pets-projectiles-weather-2026-06-17-1';
 
 // Create Express app for HTTP + WebSocket
 const app = express();
@@ -44,6 +44,9 @@ app.get('/version', (req, res) => {
       expandedSeeds: true,
       heldStolenVisuals: true,
       perennialCrops: true,
+      randomWeather: true,
+      petShop: true,
+      projectileCombat: true,
     },
   });
 });
@@ -207,6 +210,13 @@ const GEAR_CATALOG = {
   minigun: { name: 'Minigun', type: 'weapon', buyPrice: 1800, damage: 16, ammoOnBuy: 80, range: 14 },
 };
 
+const PET_CATALOG = {
+  gardenBee: { name: 'Garden Bee', buyPrice: 180, color: 0xffd166, accent: 0x3d2b1f, description: 'Buzzes beside you and slightly boosts mutation luck later.' },
+  sproutPup: { name: 'Sprout Pup', buyPrice: 260, color: 0x9b6a3c, accent: 0x52b788, description: 'A loyal farm buddy for finding your way home.' },
+  moonCat: { name: 'Moon Cat', buyPrice: 420, color: 0x403d58, accent: 0xcdb4db, description: 'A quiet night companion with a soft glow.' },
+  emberFox: { name: 'Ember Fox', buyPrice: 650, color: 0xff7a33, accent: 0xffd166, description: 'A rare warm pet that looks great in heatwaves.' },
+};
+
 const PERENNIAL_SEEDS = new Set([
   'strawberry',
   'blueberry',
@@ -227,21 +237,22 @@ const WEAPON_CATALOG = {
 
 const WEATHER_DURATION_MS = 180_000;
 const WEATHER_EVENTS = [
-  { name: 'Rain', description: 'All crops grow faster. Rain Lily surges.', growMultiplier: 1.25, mutationBonus: 0.01 },
-  { name: 'Heatwave', description: 'Some crops slow down, but fiery crops sell high.', growMultiplier: 0.9, sellBoosts: { sunburstCorn: 1.35, emberPepper: 1.45 }, mutationBonus: 0 },
-  { name: 'Thunderstorm', description: 'Storm crops grow fast and charged mutations can appear.', growMultiplier: 1.05, preferredGrowBoost: { stormroot: 1.65 }, mutationBonus: 0.04 },
-  { name: 'Fog', description: 'Visibility drops and stealing is easier.', growMultiplier: 1.0, mutationBonus: 0.015 },
-  { name: 'Golden Hour', description: 'Sell prices rise temporarily.', growMultiplier: 1.05, sellMultiplier: 1.25, mutationBonus: 0.015 },
-  { name: 'Meteor Shower', description: 'Meteor seeds and fertilizer can appear around the map.', growMultiplier: 1.0, stockBoosts: { meteorSeed: 0.22, crystalMelon: 0.12, crystalBlueberry: 0.12 }, mutationBonus: 0.05 },
-  { name: 'Bee Swarm', description: 'Mutation chances rise across the server.', growMultiplier: 1.1, mutationBonus: 0.08 },
-  { name: 'Frost Night', description: 'Normal crops slow down, cold crops become valuable.', growMultiplier: 0.82, sellBoosts: { frostBerry: 1.5, mooncapMushroom: 1.35 }, mutationBonus: 0.025 },
-  { name: 'Market Crash', description: 'Common crop sell prices drop and rare crops matter more.', growMultiplier: 1.0, sellMultiplier: 0.85, rareSellMultiplier: 1.18, mutationBonus: 0 },
-  { name: 'Market Boom', description: 'Sell prices rise. Harvest and sell fast.', growMultiplier: 1.0, sellMultiplier: 1.35, mutationBonus: 0.01 },
+  { name: 'Clear', description: 'No special weather right now.', weight: 56, growMultiplier: 1, mutationBonus: 0 },
+  { name: 'Rain', description: 'All crops grow faster. Rain Lily surges.', weight: 7, growMultiplier: 1.25, mutationBonus: 0.01 },
+  { name: 'Heatwave', description: 'Some crops slow down, but fiery crops sell high.', weight: 6, growMultiplier: 0.9, sellBoosts: { sunburstCorn: 1.35, emberPepper: 1.45 }, mutationBonus: 0 },
+  { name: 'Thunderstorm', description: 'Storm crops grow fast and charged mutations can appear.', weight: 5, growMultiplier: 1.05, preferredGrowBoost: { stormroot: 1.65 }, mutationBonus: 0.04 },
+  { name: 'Fog', description: 'Visibility drops and stealing is easier.', weight: 6, growMultiplier: 1.0, mutationBonus: 0.015 },
+  { name: 'Golden Hour', description: 'Sell prices rise temporarily.', weight: 5, growMultiplier: 1.05, sellMultiplier: 1.25, mutationBonus: 0.015 },
+  { name: 'Meteor Shower', description: 'Meteor seeds and fertilizer can appear around the map.', weight: 3, growMultiplier: 1.0, stockBoosts: { meteorSeed: 0.22, crystalMelon: 0.12, crystalBlueberry: 0.12 }, mutationBonus: 0.05 },
+  { name: 'Bee Swarm', description: 'Mutation chances rise across the server.', weight: 4, growMultiplier: 1.1, mutationBonus: 0.08 },
+  { name: 'Frost Night', description: 'Normal crops slow down, cold crops become valuable.', weight: 4, growMultiplier: 0.82, sellBoosts: { frostBerry: 1.5, mooncapMushroom: 1.35 }, mutationBonus: 0.025 },
+  { name: 'Market Crash', description: 'Common crop sell prices drop and rare crops matter more.', weight: 2, growMultiplier: 1.0, sellMultiplier: 0.85, rareSellMultiplier: 1.18, mutationBonus: 0 },
+  { name: 'Market Boom', description: 'Sell prices rise. Harvest and sell fast.', weight: 2, growMultiplier: 1.0, sellMultiplier: 1.35, mutationBonus: 0.01 },
 ];
-let weatherIndex = 0;
-let currentWeather = WEATHER_EVENTS[weatherIndex];
-let nextWeather = WEATHER_EVENTS[(weatherIndex + 1) % WEATHER_EVENTS.length];
+let currentWeather = WEATHER_EVENTS[0];
+let nextWeather = rollWeatherEvent();
 let weatherEndsAt = Date.now() + WEATHER_DURATION_MS;
+let shotCounter = 1;
 
 // Garden expansion levels: level 0 = 3x3, level 1 = 4x4, etc.
 const EXPANSION_COSTS = [500, 1000, 5000, 10000]; // costs for levels 1-4
@@ -380,16 +391,29 @@ setInterval(restock, RESTOCK_MS);
 setInterval(rotateWeather, WEATHER_DURATION_MS);
 
 function rotateWeather() {
-  weatherIndex = (weatherIndex + 1) % WEATHER_EVENTS.length;
-  currentWeather = WEATHER_EVENTS[weatherIndex];
-  nextWeather = WEATHER_EVENTS[(weatherIndex + 1) % WEATHER_EVENTS.length];
+  currentWeather = nextWeather || rollWeatherEvent();
+  nextWeather = rollWeatherEvent();
   weatherEndsAt = Date.now() + WEATHER_DURATION_MS;
   updateCropPrices();
   currentShopStock = getShopStock();
   broadcast({ type: 'weatherChanged', weather: getWeatherState() });
   broadcast({ type: 'cropPricesChanged', prices: cropPrices, restockCount, weather: getWeatherState() });
   broadcast({ type: 'shopRestocked', stock: currentShopStock, restockCount, nextRestockAt });
-  broadcast({ type: 'worldEvent', message: `${currentWeather.name} has started! ${currentWeather.description}`, event: currentWeather.name });
+  if (currentWeather.name === 'Clear') {
+    broadcast({ type: 'worldEvent', message: 'The weather cleared.', event: currentWeather.name });
+  } else {
+    broadcast({ type: 'worldEvent', message: `${currentWeather.name} has started! ${currentWeather.description}`, event: currentWeather.name });
+  }
+}
+
+function rollWeatherEvent() {
+  const totalWeight = WEATHER_EVENTS.reduce((sum, event) => sum + (event.weight || 1), 0);
+  let roll = Math.random() * totalWeight;
+  for (const event of WEATHER_EVENTS) {
+    roll -= event.weight || 1;
+    if (roll <= 0) return event;
+  }
+  return WEATHER_EVENTS[0];
 }
 
 function getWeatherState() {
@@ -461,9 +485,13 @@ function createPlayer(id, slotIndex = 0) {
     seeds: { ...STARTING_SEEDS },
     crops: {},  // { seedType: { normal, mutated } }
     gear: {},
+    pets: {},
+    activePet: null,
     weapons: { pistol: true },
     ammo: { pistol: 6 },
     activeWeapon: 'pistol',
+    gunEquipped: false,
+    aimAngle: 0,
     health: MAX_HEALTH,
     plotOrigin,
     position: getSpawnPosition(plotOrigin),
@@ -497,9 +525,18 @@ function getPlayerPublic(player) {
     seeds: player.seeds,
     crops: player.crops,
     gear: player.gear,
+    pets: player.pets,
+    activePet: player.activePet,
     weapons: player.weapons,
     ammo: player.ammo,
     activeWeapon: player.activeWeapon,
+    gunEquipped: player.gunEquipped,
+    aimAngle: player.aimAngle || 0,
+    combat: {
+      gunEquipped: player.gunEquipped,
+      aimAngle: player.aimAngle || 0,
+      activeWeapon: player.activeWeapon,
+    },
     health: player.health,
     maxHealth: MAX_HEALTH,
     plotOrigin: player.plotOrigin,
@@ -652,13 +689,14 @@ wss.on('connection', (ws) => {
   send(ws, {
     type: 'welcome',
     playerId,
-    serverFeatures: { positionUpdates: true, serverPlots: true, heldStolenVisuals: true, perennialCrops: true },
+    serverFeatures: { positionUpdates: true, serverPlots: true, heldStolenVisuals: true, perennialCrops: true, randomWeather: true, petShop: true, projectileCombat: true },
     state: getPlayerPublic(player),
     shop: { 
       catalog: SEED_CATALOG,
       stock: currentShopStock,
       cropPrices: cropPricesForWelcome(),
       gearCatalog: GEAR_CATALOG,
+      petCatalog: PET_CATALOG,
       weaponCatalog: WEAPON_CATALOG,
       restockCount,
       nextRestockAt,
@@ -731,6 +769,29 @@ function handleMessage(player, msg) {
       break;
     }
 
+    case 'buyPet': {
+      const { petType } = msg;
+      const pet = PET_CATALOG[petType];
+      if (!pet) return sendError(player, 'Unknown pet');
+      if (player.pets[petType]) return sendError(player, 'You already own that pet');
+      if (player.money < pet.buyPrice) return sendError(player, 'Not enough money');
+      player.money -= pet.buyPrice;
+      player.pets[petType] = true;
+      player.activePet = petType;
+      sendState(player);
+      broadcastAllGardens();
+      break;
+    }
+
+    case 'equipPet': {
+      const { petType } = msg;
+      if (petType !== null && !player.pets[petType]) return sendError(player, 'You do not own that pet');
+      player.activePet = petType || null;
+      sendState(player);
+      broadcastAllGardens();
+      break;
+    }
+
     case 'useGear': {
       const { itemType, plotId, cellRow, cellCol } = msg;
       const item = GEAR_CATALOG[itemType];
@@ -758,6 +819,11 @@ function handleMessage(player, msg) {
       if (!player.weapons[weaponType]) return sendError(player, 'You do not own that weapon');
       player.activeWeapon = weaponType;
       sendState(player);
+      break;
+    }
+
+    case 'shootAt': {
+      handleShootAt(player, msg);
       break;
     }
 
@@ -914,6 +980,9 @@ function updatePlayerPosition(player, msg) {
   const z = Number(source.z);
   if (!Number.isFinite(x) || !Number.isFinite(z)) return;
   player.position = { x: clamp(x, -150, 150), z: clamp(z, -150, 150) };
+  const aimAngle = Number(msg.aimAngle);
+  if (Number.isFinite(aimAngle)) player.aimAngle = aimAngle;
+  if (typeof msg.gunEquipped === 'boolean') player.gunEquipped = msg.gunEquipped;
   maybeDepositStolenCrop(player);
   broadcast({
     type: 'playerMoved',
@@ -921,12 +990,108 @@ function updatePlayerPosition(player, msg) {
     position: player.position,
     health: player.health,
     holdingStolen: player.holdingStolen,
+    activePet: player.activePet,
+    combat: {
+      gunEquipped: player.gunEquipped,
+      aimAngle: player.aimAngle || 0,
+      activeWeapon: player.activeWeapon,
+    },
   });
   const now = Date.now();
   if (!player.lastPositionSyncAt || now - player.lastPositionSyncAt >= POSITION_SYNC_MS) {
     player.lastPositionSyncAt = now;
     broadcastAllGardens();
   }
+}
+
+function handleShootAt(player, msg) {
+  const weaponType = player.activeWeapon || 'pistol';
+  const weapon = WEAPON_CATALOG[weaponType];
+  if (!weapon) return sendError(player, 'No weapon equipped');
+  if ((player.ammo[weaponType] || 0) <= 0) return sendError(player, `${weapon.name} is out of ammo`);
+  const direction = normalizeDirection(msg.direction || msg);
+  if (!direction) return sendError(player, 'Invalid aim direction');
+
+  player.ammo[weaponType]--;
+  player.gunEquipped = true;
+  player.aimAngle = Math.atan2(direction.x, direction.z);
+
+  const origin = { x: player.position.x, z: player.position.z };
+  const range = weapon.range || 10;
+  const speed = weapon.projectileSpeed || projectileSpeedFor(weaponType);
+  const shotId = `s${shotCounter++}`;
+  broadcast({
+    type: 'bulletFired',
+    shotId,
+    shooterId: player.id,
+    weaponType,
+    origin,
+    direction,
+    range,
+    speed,
+    startedAt: Date.now(),
+  });
+  sendState(player);
+  broadcastAllGardens();
+
+  const travelMs = Math.min(750, Math.max(180, (range / speed) * 1000));
+  setTimeout(() => resolveProjectileHit(player.id, shotId, weaponType, origin, direction, range), travelMs);
+}
+
+function projectileSpeedFor(weaponType) {
+  if (weaponType === 'shotgun') return 18;
+  if (weaponType === 'minigun') return 28;
+  if (weaponType === 'ak47') return 30;
+  return 24;
+}
+
+function resolveProjectileHit(shooterId, shotId, weaponType, origin, direction, range) {
+  const shooter = players.get(shooterId);
+  const weapon = WEAPON_CATALOG[weaponType];
+  if (!weapon) return;
+  const target = findProjectileTarget(shooterId, origin, direction, range, weaponType === 'shotgun' ? 1.15 : 0.72);
+  if (!target) {
+    broadcast({ type: 'bulletExpired', shotId });
+    return;
+  }
+
+  const victim = target.player;
+  victim.health = Math.max(0, victim.health - weapon.damage);
+  if (victim.health <= 0) {
+    respawnPlayer(victim);
+    broadcast({ type: 'playerDefeated', attackerId: shooterId, victimId: victim.id });
+  } else {
+    broadcast({ type: 'playerHit', attackerId: shooterId, victimId: victim.id, health: victim.health });
+  }
+  if (shooter) sendState(shooter);
+  sendState(victim);
+  broadcastAllGardens();
+}
+
+function findProjectileTarget(shooterId, origin, direction, range, hitRadius) {
+  let best = null;
+  for (const [, target] of players) {
+    if (target.id === shooterId || target.health <= 0) continue;
+    const relX = target.position.x - origin.x;
+    const relZ = target.position.z - origin.z;
+    const forward = relX * direction.x + relZ * direction.z;
+    if (forward < 0 || forward > range) continue;
+    const closestX = origin.x + direction.x * forward;
+    const closestZ = origin.z + direction.z * forward;
+    const miss = distance(target.position, { x: closestX, z: closestZ });
+    if (miss > hitRadius) continue;
+    if (!best || forward < best.forward) best = { player: target, forward };
+  }
+  return best;
+}
+
+function normalizeDirection(source) {
+  const x = Number(source.x ?? source.dx);
+  const z = Number(source.z ?? source.dz);
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+  const length = Math.hypot(x, z);
+  if (length < 0.001) return null;
+  return { x: x / length, z: z / length };
 }
 
 function maybeDepositStolenCrop(player) {

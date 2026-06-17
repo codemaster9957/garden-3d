@@ -5,13 +5,14 @@
 
 import './style.css';
 import * as THREE       from 'three';
-import { initScene, getScene, getCamera, getRenderer, updatePointer, raycastCells, renderFrame, setCameraTarget } from './scene.js';
+import { initScene, getScene, getCamera, getRenderer, updatePointer, pointerGroundPoint, raycastCells, renderFrame, setCameraTarget } from './scene.js';
 import { createGarden } from './garden.js';
 import { createPlayer } from './player.js';
 import { createWorld } from './world.js';
 import { SEED_CATALOG } from './seeds.js';
-import { buildHUD, initHotbar, initKeyboard, updateMoney, updateSeeds, updateCrops, updateShop, updateSellCrops, updateExpansion, updatePlayerInventory, updateWeather, setConnectionStatus, showToast, getSelectedSeed, isHarvestMode, getSelectedGear, clearSelectedGear, openShopModal, openGearShopModal, openSellModal, buildShopModal, buildGearShopModal, buildSellModal, setInteractHint } from './ui.js';
-import { getNearestOtherPlayer, getRemoteCellInfo, getRemoteCellMeshes, updateOtherPlayers, updateRemotePlayerMove } from './otherPlayers.js';
+import { buildHUD, initHotbar, initKeyboard, updateMoney, updateSeeds, updateCrops, updateShop, updateSellCrops, updateExpansion, updatePlayerInventory, updateWeather, setConnectionStatus, showToast, getSelectedSeed, isHarvestMode, getSelectedGear, clearSelectedGear, openShopModal, openGearShopModal, openPetShopModal, openSellModal, buildShopModal, buildGearShopModal, buildPetShopModal, buildSellModal, setGunMode, setInteractHint } from './ui.js';
+import { getRemoteCellInfo, getRemoteCellMeshes, updateOtherPlayers, updateRemotePlayerMove } from './otherPlayers.js';
+import { initMusic, setMusicWeather } from './audio.js';
 import * as Net from './network.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
@@ -23,7 +24,9 @@ initHotbar();
 initKeyboard();
 buildShopModal();
 buildGearShopModal();
+buildPetShopModal();
 buildSellModal();
+initMusic();
 
 // My garden (centered)
 let myGarden = null;
@@ -33,6 +36,11 @@ let player = null;
 let world  = null;
 let serverFeatures = {};
 let cropHoverHint = null;
+let latestState = null;
+let gunEquipped = false;
+let aimAngle = 0;
+let aimDirection = { x: 0, z: 1 };
+const bullets = [];
 
 // ─── Network ──────────────────────────────────────────────────────────────────
 setConnectionStatus(false, null);
@@ -44,6 +52,7 @@ Net.onMessage('connectionError', () => showToast('Cannot reach server', 'error')
 Net.onMessage('welcome', (msg) => {
   setConnectionStatus(true, msg.playerId);
   serverFeatures = msg.serverFeatures || {};
+  latestState = msg.state;
 
   world = createWorld(scene);
 
@@ -53,7 +62,9 @@ Net.onMessage('welcome', (msg) => {
   player       = createPlayer(scene);
   player.setPosition(msg.state.position?.x ?? plotOrigin.x, msg.state.position?.z ?? plotOrigin.z + 5);
   player.setHeldItem?.(msg.state.holdingStolen);
-  myGarden     = createGarden(scene, plotOrigin.x, plotOrigin.z, gridSize);
+  player.setPet?.(msg.state.activePet);
+  player.setGunEquipped?.(gunEquipped, msg.state.activeWeapon);
+  myGarden     = createGarden(scene, plotOrigin.x, plotOrigin.z, gridSize, { highlight: true });
   myCellMeshes = [...myGarden.cellMap.keys()];
   const pos     = player.getPosition();
   setCameraTarget(pos.x, pos.z);
@@ -65,8 +76,10 @@ Net.onMessage('welcome', (msg) => {
   updatePlayerInventory(msg.state);
   updateSellCrops(msg.state.crops, msg.shop.catalog);
   updateExpansion(msg.state.expansionLevel, msg.state.gridSize);
-  updateShop(msg.shop.catalog, msg.shop.stock, msg.shop.cropPrices, msg.shop.restockCount, msg.shop.gearCatalog, msg.shop.nextRestockAt);
+  updateShop(msg.shop.catalog, msg.shop.stock, msg.shop.cropPrices, msg.shop.restockCount, msg.shop.gearCatalog, msg.shop.nextRestockAt, msg.shop.petCatalog);
   updateWeather(msg.weather);
+  setMusicWeather(msg.weather);
+  setGunMode(gunEquipped, msg.state.activeWeapon, msg.state.ammo?.[msg.state.activeWeapon] || 0);
 
   // Render other players already online
   updateOtherPlayers(scene, msg.allGardens, msg.playerId);
@@ -74,18 +87,19 @@ Net.onMessage('welcome', (msg) => {
 
 Net.onMessage('stateUpdate', (msg) => {
   if (!myGarden) return;
+  latestState = msg.state;
   
   // Check if garden was expanded
   if (msg.state.gridSize && msg.state.gridSize !== myGarden.gridSize) {
     // Remove old garden and create new one with new size
     const plotOrigin = msg.state.plotOrigin || { x: myGarden.originX, z: myGarden.originZ };
     myGarden.dispose();
-    myGarden = createGarden(scene, plotOrigin.x, plotOrigin.z, msg.state.gridSize);
+    myGarden = createGarden(scene, plotOrigin.x, plotOrigin.z, msg.state.gridSize, { highlight: true });
     myCellMeshes = [...myGarden.cellMap.keys()];
     showToast('🌱 Garden expanded!', 'success');
   } else if (msg.state.plotOrigin && (myGarden.originX !== msg.state.plotOrigin.x || myGarden.originZ !== msg.state.plotOrigin.z)) {
     myGarden.dispose();
-    myGarden = createGarden(scene, msg.state.plotOrigin.x, msg.state.plotOrigin.z, msg.state.gridSize || myGarden.gridSize);
+    myGarden = createGarden(scene, msg.state.plotOrigin.x, msg.state.plotOrigin.z, msg.state.gridSize || myGarden.gridSize, { highlight: true });
     myCellMeshes = [...myGarden.cellMap.keys()];
   }
   
@@ -95,6 +109,9 @@ Net.onMessage('stateUpdate', (msg) => {
   updateCrops(msg.state.crops);
   updatePlayerInventory(msg.state);
   player?.setHeldItem?.(msg.state.holdingStolen);
+  player?.setPet?.(msg.state.activePet);
+  player?.setGunEquipped?.(gunEquipped, msg.state.activeWeapon);
+  setGunMode(gunEquipped, msg.state.activeWeapon, msg.state.ammo?.[msg.state.activeWeapon] || 0);
   updateSellCrops(msg.state.crops);
   updateExpansion(msg.state.expansionLevel, msg.state.gridSize);
   if (msg.state.position && player) {
@@ -121,10 +138,12 @@ Net.onMessage('cropPricesChanged', (msg) => {
   showToast('Crop sell market changed!', 'info');
   updateShop(null, null, msg.prices, msg.restockCount);
   if (msg.weather) updateWeather(msg.weather);
+  if (msg.weather) setMusicWeather(msg.weather);
 });
 
 Net.onMessage('weatherChanged', (msg) => {
   updateWeather(msg.weather);
+  setMusicWeather(msg.weather);
   showToast(`${msg.weather.current}: ${msg.weather.description}`, 'info');
 });
 
@@ -139,8 +158,12 @@ Net.onMessage('harvestPopup', (msg) => {
 
 Net.onMessage('playerMoved', (msg) => {
   if (msg.playerId !== Net.getPlayerId()) {
-    updateRemotePlayerMove(msg.playerId, msg.position, msg.health, msg.holdingStolen);
+    updateRemotePlayerMove(msg.playerId, msg.position, msg.health, msg.holdingStolen, msg.combat, msg.activePet);
   }
+});
+
+Net.onMessage('bulletFired', (msg) => {
+  spawnBullet(msg);
 });
 
 Net.onMessage('gearUsed', (msg) => {
@@ -194,6 +217,12 @@ window.addEventListener('beforeunload', () => {
 canvas.addEventListener('click', (event) => {
   if (!myGarden || !Net.isConnected()) return;
 
+  if (gunEquipped) {
+    updateAimFromEvent(event);
+    Net.shootAt(aimDirection);
+    return;
+  }
+
   updatePointer(event, canvas);
   const selectedGear = getSelectedGear();
   const ownHits = raycastCells(myCellMeshes);
@@ -228,6 +257,7 @@ canvas.addEventListener('click', (event) => {
 
 canvas.addEventListener('mousemove', (event) => {
   if (!myGarden || !Net.isConnected()) return;
+  if (gunEquipped) updateAimFromEvent(event);
   updatePointer(event, canvas);
   const hits = raycastCells(myCellMeshes);
   if (!hits.length) { cropHoverHint = null; return; }
@@ -244,11 +274,13 @@ canvas.addEventListener('mousemove', (event) => {
 // ─── World interaction / E key ─────────────────────────────────────────────────
 window.addEventListener('keydown', (event) => {
   if (event.key === 'f' || event.key === 'F') {
-    if (!player || !Net.isConnected()) return;
-    const pos = player.getPosition();
-    const target = getNearestOtherPlayer(pos.x, pos.z, 14);
-    if (target) Net.shootPlayer(target.id);
-    else showToast('No player in range', 'error');
+    if (!player) return;
+    gunEquipped = !gunEquipped;
+    const activeWeapon = latestState?.activeWeapon || 'pistol';
+    player.setGunEquipped?.(gunEquipped, activeWeapon);
+    player.setAimAngle?.(aimAngle);
+    setGunMode(gunEquipped, activeWeapon, latestState?.ammo?.[activeWeapon] || 0);
+    showToast(gunEquipped ? `${activeWeapon} equipped` : 'Gun lowered', 'info');
     return;
   }
   if (event.key !== 'e' && event.key !== 'E') return;
@@ -258,6 +290,8 @@ window.addEventListener('keydown', (event) => {
     openShopModal();
   } else if (world.gearShop.inRange(x, z)) {
     openGearShopModal();
+  } else if (world.petShop.inRange(x, z)) {
+    openPetShopModal();
   } else if (world.sellStand.inRange(x, z)) {
     openSellModal();
   }
@@ -269,9 +303,59 @@ function updateWorldUI() {
   let hint = null;
   if (world.seedShop.inRange(x, z)) hint = 'Press E to open Seed Shop';
   else if (world.gearShop.inRange(x, z)) hint = 'Press E to open Gear Shop';
+  else if (world.petShop.inRange(x, z)) hint = 'Press E to open Pet Shop';
   else if (world.sellStand.inRange(x, z)) hint = 'Press E to open Sell Stand';
+  else if (gunEquipped) hint = 'Gun equipped - aim with mouse, click to fire, F to lower';
   else if (cropHoverHint) hint = cropHoverHint;
   setInteractHint(hint);
+}
+
+function updateAimFromEvent(event) {
+  if (!player) return;
+  const target = pointerGroundPoint(event, canvas);
+  if (!target) return;
+  const pos = player.getPosition();
+  const dx = target.x - pos.x;
+  const dz = target.z - pos.z;
+  const length = Math.hypot(dx, dz);
+  if (length < 0.05) return;
+  aimDirection = { x: dx / length, z: dz / length };
+  aimAngle = Math.atan2(aimDirection.x, aimDirection.z);
+  player.setAimAngle?.(aimAngle);
+}
+
+function spawnBullet(msg) {
+  const color = msg.weaponType === 'shotgun' ? 0xffd166 : msg.weaponType === 'minigun' ? 0x9be7ff : 0xfff3b0;
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(msg.weaponType === 'shotgun' ? 0.09 : 0.07, 8, 6),
+    new THREE.MeshBasicMaterial({ color })
+  );
+  mesh.position.set(msg.origin.x, 0.72, msg.origin.z);
+  scene.add(mesh);
+  bullets.push({
+    mesh,
+    origin: { ...msg.origin },
+    direction: msg.direction,
+    range: msg.range || 10,
+    speed: msg.speed || 24,
+    travelled: 0,
+  });
+}
+
+function updateBullets(dt) {
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const bullet = bullets[i];
+    const step = bullet.speed * dt;
+    bullet.travelled += step;
+    bullet.mesh.position.x += bullet.direction.x * step;
+    bullet.mesh.position.z += bullet.direction.z * step;
+    if (bullet.travelled >= bullet.range) {
+      scene.remove(bullet.mesh);
+      bullet.mesh.geometry?.dispose();
+      bullet.mesh.material?.dispose();
+      bullets.splice(i, 1);
+    }
+  }
 }
 
 let lastFrameTime = performance.now();
@@ -287,10 +371,11 @@ function loop() {
     setCameraTarget(pos.x, pos.z);
     updateWorldUI();
     if (Net.isConnected() && serverFeatures.positionUpdates && now - lastPositionSent > 150) {
-      Net.updatePosition(pos.x, pos.z);
+      Net.updatePosition(pos.x, pos.z, aimAngle, gunEquipped);
       lastPositionSent = now;
     }
   }
+  updateBullets(dt);
 
   requestAnimationFrame(loop);
   renderFrame();

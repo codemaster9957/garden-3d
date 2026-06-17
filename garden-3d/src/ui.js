@@ -3,7 +3,7 @@
  */
 
 import { SEED_CATALOG, SEED_KEYS, seedColorHex, seedIcon, rarityColor, rarityRank } from './seeds.js';
-import { buySeed, buyGear, equipWeapon, sellAll, expandGarden } from './network.js';
+import { buySeed, buyGear, buyPet, equipPet, equipWeapon, sellAll, expandGarden } from './network.js';
 
 const EXPANSION_COSTS = [500, 1000, 5000, 10000];
 const QUALITY_MULTIPLIERS = { normal: 1, silver: 1.25, gold: 1.6, rainbow: 2.25, giant: 2.75, mutated: 2 };
@@ -16,6 +16,7 @@ let _shopCatalog = {};
 let _shopStock = {};
 let _cropPrices = {};
 let _gearCatalog = {};
+let _petCatalog = {};
 let _restockCount = 0;
 let _nextRestockAt = 0;
 let _shopSort = 'inStock';
@@ -23,13 +24,27 @@ let _selectedShopSeed = null;
 let _weather = null;
 let _shopOpen = false;
 let _gearShopOpen = false;
+let _petShopOpen = false;
 let _sellCrops = {};
 let _sellOpen = false;
+let _gunMode = false;
+let _gunLabel = 'Pistol';
+let _gunAmmo = 0;
 
 export function getSelectedSeed() { return selectedSeed; }
 export function isHarvestMode() { return harvestMode; }
 export function getSelectedGear() { return selectedGear; }
 export function clearSelectedGear() { selectedGear = null; _refreshGearPanel(); }
+export function setGunMode(enabled, weaponType = 'pistol', ammo = 0) {
+  _gunMode = !!enabled;
+  _gunLabel = gearLabel(weaponType);
+  _gunAmmo = ammo || 0;
+  if (_gunMode) {
+    harvestMode = false;
+    selectedGear = null;
+  }
+  _refreshHotbar();
+}
 
 export function buildHUD() {
   const hud = document.createElement('div');
@@ -51,7 +66,7 @@ export function buildHUD() {
     <div id="hotbar"></div>
     <div id="mode-indicator"></div>
     <div id="interact-hint" class="hidden"></div>
-    <div id="hint-bar">WASD move | E interact | H harvest/steal | F fire</div>
+    <div id="hint-bar">WASD move | E interact | H harvest/steal | F equip gun | click fire</div>
     <div id="weather-effects" class="weather-effect hidden"></div>
     <div id="toast-stack"></div>
   `;
@@ -104,6 +119,9 @@ function _refreshHotbar() {
   if (!ind) return;
   if (harvestMode) {
     ind.textContent = 'Harvest/Steal Mode - click a ready plant';
+    ind.className = 'harvest';
+  } else if (_gunMode) {
+    ind.textContent = `${_gunLabel} equipped - click to fire (${_gunAmmo} ammo)`;
     ind.className = 'harvest';
   } else if (selectedGear) {
     ind.textContent = `Using ${gearLabel(selectedGear)} - click your garden`;
@@ -300,15 +318,52 @@ export function closeGearShopModal() {
 
 export function isGearShopOpen() { return _gearShopOpen; }
 
-export function updateShop(catalog, stock, cropPrices, restockCount, gearCatalog, nextRestockAt) {
+export function buildPetShopModal() {
+  const modal = document.createElement('div');
+  modal.id = 'pet-shop-modal';
+  modal.className = 'modal hidden';
+  modal.innerHTML = `
+    <div class="modal-inner gear-modal-inner">
+      <div class="shop-title-row">
+        <div>
+          <h2>Pet Shop</h2>
+          <div class="shop-meta">Companions that follow you around the garden.</div>
+        </div>
+        <button id="pet-shop-close" class="modal-close compact">Close [E]</button>
+      </div>
+      <div id="pet-shop-items"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.getElementById('pet-shop-close').addEventListener('click', closePetShopModal);
+  _renderPetShopItems();
+  return modal;
+}
+
+export function openPetShopModal() {
+  _petShopOpen = true;
+  document.getElementById('pet-shop-modal')?.classList.remove('hidden');
+  _renderPetShopItems();
+}
+
+export function closePetShopModal() {
+  _petShopOpen = false;
+  document.getElementById('pet-shop-modal')?.classList.add('hidden');
+}
+
+export function isPetShopOpen() { return _petShopOpen; }
+
+export function updateShop(catalog, stock, cropPrices, restockCount, gearCatalog, nextRestockAt, petCatalog) {
   _shopCatalog = catalog ?? _shopCatalog;
   _shopStock = stock ?? _shopStock;
   _cropPrices = cropPrices ?? _cropPrices;
   _gearCatalog = gearCatalog ?? _gearCatalog;
+  _petCatalog = petCatalog ?? _petCatalog;
   _restockCount = restockCount ?? _restockCount;
   _nextRestockAt = nextRestockAt ?? _nextRestockAt;
   _renderShopItems();
   _renderGearShopItems();
+  _renderPetShopItems();
   _renderTimers();
   if (_sellOpen) _renderSellItems();
 }
@@ -412,6 +467,25 @@ function _renderGearShopItems() {
   }
 }
 
+function _renderPetShopItems() {
+  const el = document.getElementById('pet-shop-items');
+  if (!el) return;
+  el.innerHTML = '';
+  for (const [key, info] of Object.entries(_petCatalog)) {
+    const div = document.createElement('div');
+    div.className = 'gear-shop-row pet-shop-row';
+    div.innerHTML = `
+      <span class="gear-icon">${petIcon(key)}</span>
+      <span class="sname">${info.name}<small>${info.description || ''}</small></span>
+      <span class="stock">Companion</span>
+      <span class="price">Buy ${info.buyPrice}</span>
+      <button data-pet="${key}">Buy</button>
+    `;
+    div.querySelector('button').addEventListener('click', () => buyPet(key));
+    el.appendChild(div);
+  }
+}
+
 function _renderGearPanel(state) {
   const el = document.getElementById('gear-panel');
   if (!el) return;
@@ -419,6 +493,8 @@ function _renderGearPanel(state) {
   const weapons = state.weapons || {};
   const ammo = state.ammo || {};
   const activeWeapon = state.activeWeapon || 'pistol';
+  const pets = state.pets || {};
+  const activePet = state.activePet;
   const holding = state.holdingStolen;
   const protection = Math.max(0, (state.protectedUntil || 0) - Date.now());
   const gearButtons = Object.entries(gear)
@@ -429,11 +505,16 @@ function _renderGearPanel(state) {
     .filter(key => weapons[key])
     .map(key => `<button class="gear-btn ${activeWeapon === key ? 'active' : ''}" data-equip-weapon="${key}">${gearIcon(key)} ${gearLabel(key)} ${ammo[key] || 0}</button>`)
     .join('');
+  const petButtons = Object.keys(pets)
+    .filter(key => pets[key])
+    .map(key => `<button class="gear-btn ${activePet === key ? 'active' : ''}" data-equip-pet="${key}">${petIcon(key)} ${petLabel(key)}</button>`)
+    .join('');
   el.innerHTML = `
     ${protection > 0 ? `<span class="holding shield">Shield ${formatClock(protection)}</span>` : ''}
     ${holding ? `<span class="holding">Holding stolen ${SEED_CATALOG[holding.seedType]?.name ?? holding.seedType}</span>` : ''}
     ${gearButtons}
     ${weaponButtons}
+    ${petButtons}
   `;
   el.querySelectorAll('[data-use-gear]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -446,6 +527,9 @@ function _renderGearPanel(state) {
   });
   el.querySelectorAll('[data-equip-weapon]').forEach(btn => {
     btn.addEventListener('click', () => equipWeapon(btn.dataset.equipWeapon));
+  });
+  el.querySelectorAll('[data-equip-pet]').forEach(btn => {
+    btn.addEventListener('click', () => equipPet(btn.dataset.equipPet));
   });
   _refreshHotbar();
 }
@@ -577,6 +661,23 @@ function gearIcon(key) {
   if (key === 'minigun') return 'MG';
   if (key === 'pistol') return 'P';
   return '*';
+}
+
+function petIcon(key) {
+  if (key === 'gardenBee') return 'Bee';
+  if (key === 'sproutPup') return 'Pup';
+  if (key === 'moonCat') return 'Cat';
+  if (key === 'emberFox') return 'Fox';
+  return 'Pet';
+}
+
+function petLabel(key) {
+  return _petCatalog[key]?.name || {
+    gardenBee: 'Garden Bee',
+    sproutPup: 'Sprout Pup',
+    moonCat: 'Moon Cat',
+    emberFox: 'Ember Fox',
+  }[key] || key;
 }
 
 function gearLabel(key) {

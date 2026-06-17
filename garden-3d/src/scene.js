@@ -24,6 +24,15 @@ export function raycastCells(objects) {
   return raycaster.intersectObjects(objects, false);
 }
 
+export function pointerGroundPoint(event, canvas) {
+  if (!camera) return null;
+  updatePointer(event, canvas);
+  raycaster.setFromCamera(pointer, camera);
+  const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const hit = new THREE.Vector3();
+  return raycaster.ray.intersectPlane(ground, hit) ? { x: hit.x, z: hit.z } : null;
+}
+
 // How many world units the camera shows vertically
 const FRUST_H = 16;
 

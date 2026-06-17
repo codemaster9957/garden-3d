@@ -118,6 +118,14 @@ export function buyGear(itemType) {
   send({ type: 'buyGear', itemType });
 }
 
+export function buyPet(petType) {
+  send({ type: 'buyPet', petType });
+}
+
+export function equipPet(petType) {
+  send({ type: 'equipPet', petType });
+}
+
 export function useGear(itemType, plotId, cellRow, cellCol) {
   send({ type: 'useGear', itemType, plotId, cellRow, cellCol });
 }
@@ -130,12 +138,16 @@ export function shootPlayer(targetId) {
   send({ type: 'shootPlayer', targetId });
 }
 
+export function shootAt(direction) {
+  send({ type: 'shootAt', direction });
+}
+
 export function stealPlant(ownerId, plotId, cellRow, cellCol) {
   send({ type: 'stealPlant', ownerId, plotId, cellRow, cellCol });
 }
 
-export function updatePosition(x, z) {
-  send({ type: 'updatePosition', x, z });
+export function updatePosition(x, z, aimAngle = null, gunEquipped = false) {
+  send({ type: 'updatePosition', x, z, aimAngle, gunEquipped });
 }
 
 export function plantSeed(plotId, cellRow, cellCol, seedType) {
