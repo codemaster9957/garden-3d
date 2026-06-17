@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { createGarden } from './garden.js';
+import { SEED_CATALOG, plantColor } from './seeds.js';
 
 const others = new Map();
 const remoteCells = new Map();
@@ -16,6 +17,7 @@ export function updateOtherPlayers(scene, allGardens, myPlayerId) {
     if (!remoteGardens.find(g => g.id === id)) {
       entry.garden.dispose();
       scene.remove(entry.avatar);
+      disposeMeshGroup(entry.avatar);
       if (entry.label?.parentNode) entry.label.remove();
       others.delete(id);
     }
@@ -42,11 +44,9 @@ export function updateOtherPlayers(scene, allGardens, myPlayerId) {
     }
 
     entry.data = gData;
-    entry.avatar.position.set(gData.position?.x ?? origin.x, 0, gData.position?.z ?? origin.z + 5);
+    moveAvatar(entry.avatar, gData.position?.x ?? origin.x, gData.position?.z ?? origin.z + 5);
+    setAvatarHeldItem(entry.avatar, gData.holdingStolen);
     entry.label.textContent = `${gData.id} HP ${gData.health ?? 100}`;
-    if (entry.data?.position) {
-      entry.avatar.position.set(entry.data.position.x, 0, entry.data.position.z);
-    }
     entry.garden.update(gData.plots);
 
     for (const mesh of entry.garden.cellMap.keys()) {
@@ -90,9 +90,10 @@ export function updateRemotePlayerMove(playerId, position, health, holdingStolen
     ...entry.data,
     position,
     health: health ?? entry.data?.health,
-    holdingStolen: holdingStolen ?? entry.data?.holdingStolen,
+    holdingStolen: holdingStolen === undefined ? entry.data?.holdingStolen : holdingStolen,
   };
-  entry.avatar.position.set(position.x, 0, position.z);
+  moveAvatar(entry.avatar, position.x, position.z);
+  setAvatarHeldItem(entry.avatar, entry.data.holdingStolen);
   entry.label.textContent = `${playerId} HP ${entry.data.health ?? 100}`;
 }
 
@@ -122,8 +123,83 @@ function createRemoteAvatar(scene, playerId) {
   head.position.y = 1.27;
   root.add(head);
 
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.32, 10),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2 })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = -0.09;
+  root.add(shadow);
+
   scene.add(root);
   return root;
+}
+
+function moveAvatar(avatar, x, z) {
+  const dx = x - avatar.position.x;
+  const dz = z - avatar.position.z;
+  if (Math.abs(dx) + Math.abs(dz) > 0.01) {
+    avatar.rotation.y = Math.atan2(dx, dz);
+  }
+  avatar.position.set(x, 0, z);
+}
+
+function setAvatarHeldItem(avatar, item) {
+  const nextKey = item?.seedType ? `${item.seedType}:${item.quality || ''}:${item.mutationName || ''}` : '';
+  if (avatar.userData.heldKey === nextKey) return;
+  avatar.userData.heldKey = nextKey;
+  if (avatar.userData.heldItem) {
+    avatar.remove(avatar.userData.heldItem);
+    disposeMeshGroup(avatar.userData.heldItem);
+    avatar.userData.heldItem = null;
+  }
+  if (!item?.seedType) return;
+  const held = makeHeldCrop(item);
+  avatar.userData.heldItem = held;
+  avatar.add(held);
+}
+
+function makeHeldCrop(item) {
+  const info = SEED_CATALOG[item.seedType] || {};
+  const color = plantColor(item.seedType, 4, 4, item.quality, item.mutationName) || info.color || 0xffd166;
+  const group = new THREE.Group();
+  group.position.set(0, 0.95, 0.58);
+
+  const crop = new THREE.Mesh(
+    new THREE.SphereGeometry(item.quality === 'Giant' ? 0.34 : 0.26, 12, 8),
+    new THREE.MeshLambertMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: item.mutationName || item.quality === 'Gold' || item.quality === 'Rainbow' ? 0.38 : 0.12,
+    })
+  );
+  group.add(crop);
+
+  const leaf = new THREE.Mesh(
+    new THREE.ConeGeometry(0.12, 0.22, 5),
+    new THREE.MeshLambertMaterial({ color: info.stemColor || 0x52b788 })
+  );
+  leaf.position.y = 0.25;
+  leaf.rotation.x = Math.PI;
+  group.add(leaf);
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.34, 0.025, 6, 18),
+    new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true, opacity: 0.5 })
+  );
+  ring.rotation.x = Math.PI / 2;
+  group.add(ring);
+
+  return group;
+}
+
+function disposeMeshGroup(group) {
+  group.traverse(obj => {
+    if (obj.isMesh) {
+      obj.geometry?.dispose();
+      obj.material?.dispose();
+    }
+  });
 }
 
 function hashColor(text) {

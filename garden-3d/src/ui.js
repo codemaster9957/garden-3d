@@ -22,6 +22,7 @@ let _shopSort = 'inStock';
 let _selectedShopSeed = null;
 let _weather = null;
 let _shopOpen = false;
+let _gearShopOpen = false;
 let _sellCrops = {};
 let _sellOpen = false;
 
@@ -51,7 +52,7 @@ export function buildHUD() {
     <div id="mode-indicator"></div>
     <div id="interact-hint" class="hidden"></div>
     <div id="hint-bar">WASD move | E interact | H harvest/steal | F fire</div>
-    <div id="fog-overlay" class="hidden"></div>
+    <div id="weather-effects" class="weather-effect hidden"></div>
     <div id="toast-stack"></div>
   `;
   document.body.appendChild(hud);
@@ -190,8 +191,13 @@ export function updateExpansion(level = 0, gridSize = 3) {
 export function updateWeather(weather) {
   _weather = weather || _weather;
   _renderTimers();
-  const overlay = document.getElementById('fog-overlay');
-  overlay?.classList.toggle('hidden', _weather?.current !== 'Fog');
+  const overlay = document.getElementById('weather-effects');
+  if (!overlay) return;
+  const current = _weather?.current || 'Clear';
+  overlay.className = `weather-effect weather-${slug(current)}`;
+  overlay.classList.toggle('hidden', !current || current === 'Clear');
+  overlay.dataset.weather = current;
+  document.body.dataset.weather = slug(current);
 }
 
 export function setConnectionStatus(conn, pid) {
@@ -241,8 +247,6 @@ export function buildShopModal() {
         </div>
         <aside id="seed-info-card" class="seed-info-card">Hover a seed for details.</aside>
       </div>
-      <h2 class="shop-section-title">Gear Shop</h2>
-      <div id="gear-shop-items"></div>
     </div>
   `;
   document.body.appendChild(modal);
@@ -260,6 +264,41 @@ export function buildShopModal() {
 export function openShopModal() { _shopOpen = true; document.getElementById('shop-modal')?.classList.remove('hidden'); _renderTimers(); }
 export function closeShopModal() { _shopOpen = false; document.getElementById('shop-modal')?.classList.add('hidden'); }
 export function isShopOpen() { return _shopOpen; }
+
+export function buildGearShopModal() {
+  const modal = document.createElement('div');
+  modal.id = 'gear-shop-modal';
+  modal.className = 'modal hidden';
+  modal.innerHTML = `
+    <div class="modal-inner gear-modal-inner">
+      <div class="shop-title-row">
+        <div>
+          <h2>Gear Shop</h2>
+          <div class="shop-meta">Tools, defenses, and weapons for protecting your crops.</div>
+        </div>
+        <button id="gear-shop-close" class="modal-close compact">Close [E]</button>
+      </div>
+      <div id="gear-shop-items"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.getElementById('gear-shop-close').addEventListener('click', closeGearShopModal);
+  _renderGearShopItems();
+  return modal;
+}
+
+export function openGearShopModal() {
+  _gearShopOpen = true;
+  document.getElementById('gear-shop-modal')?.classList.remove('hidden');
+  _renderGearShopItems();
+}
+
+export function closeGearShopModal() {
+  _gearShopOpen = false;
+  document.getElementById('gear-shop-modal')?.classList.add('hidden');
+}
+
+export function isGearShopOpen() { return _gearShopOpen; }
 
 export function updateShop(catalog, stock, cropPrices, restockCount, gearCatalog, nextRestockAt) {
   _shopCatalog = catalog ?? _shopCatalog;

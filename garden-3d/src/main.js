@@ -10,7 +10,7 @@ import { createGarden } from './garden.js';
 import { createPlayer } from './player.js';
 import { createWorld } from './world.js';
 import { SEED_CATALOG } from './seeds.js';
-import { buildHUD, initHotbar, initKeyboard, updateMoney, updateSeeds, updateCrops, updateShop, updateSellCrops, updateExpansion, updatePlayerInventory, updateWeather, setConnectionStatus, showToast, getSelectedSeed, isHarvestMode, getSelectedGear, clearSelectedGear, openShopModal, openSellModal, buildShopModal, buildSellModal, setInteractHint } from './ui.js';
+import { buildHUD, initHotbar, initKeyboard, updateMoney, updateSeeds, updateCrops, updateShop, updateSellCrops, updateExpansion, updatePlayerInventory, updateWeather, setConnectionStatus, showToast, getSelectedSeed, isHarvestMode, getSelectedGear, clearSelectedGear, openShopModal, openGearShopModal, openSellModal, buildShopModal, buildGearShopModal, buildSellModal, setInteractHint } from './ui.js';
 import { getNearestOtherPlayer, getRemoteCellInfo, getRemoteCellMeshes, updateOtherPlayers, updateRemotePlayerMove } from './otherPlayers.js';
 import * as Net from './network.js';
 
@@ -22,6 +22,7 @@ buildHUD();
 initHotbar();
 initKeyboard();
 buildShopModal();
+buildGearShopModal();
 buildSellModal();
 
 // My garden (centered)
@@ -51,6 +52,7 @@ Net.onMessage('welcome', (msg) => {
   const plotOrigin = msg.state.plotOrigin || { x: 0, z: 0 };
   player       = createPlayer(scene);
   player.setPosition(msg.state.position?.x ?? plotOrigin.x, msg.state.position?.z ?? plotOrigin.z + 5);
+  player.setHeldItem?.(msg.state.holdingStolen);
   myGarden     = createGarden(scene, plotOrigin.x, plotOrigin.z, gridSize);
   myCellMeshes = [...myGarden.cellMap.keys()];
   const pos     = player.getPosition();
@@ -92,6 +94,7 @@ Net.onMessage('stateUpdate', (msg) => {
   updateSeeds(msg.state.seeds);
   updateCrops(msg.state.crops);
   updatePlayerInventory(msg.state);
+  player?.setHeldItem?.(msg.state.holdingStolen);
   updateSellCrops(msg.state.crops);
   updateExpansion(msg.state.expansionLevel, msg.state.gridSize);
   if (msg.state.position && player) {
@@ -254,7 +257,7 @@ window.addEventListener('keydown', (event) => {
   if (world.seedShop.inRange(x, z)) {
     openShopModal();
   } else if (world.gearShop.inRange(x, z)) {
-    openShopModal();
+    openGearShopModal();
   } else if (world.sellStand.inRange(x, z)) {
     openSellModal();
   }

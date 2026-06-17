@@ -202,7 +202,7 @@ body {
 /* ── Mode Indicator ───────────────────────────────────────────────────────── */
 #mode-indicator {
   position: absolute;
-  bottom: 48px;
+  bottom: 72px;
   left: 50%;
   transform: translateX(-50%);
   background: var(--ui-bg);
@@ -458,7 +458,7 @@ body {
 #inventory-panel {
   position: absolute;
   left: 14px;
-  bottom: 18px;
+  bottom: 102px;
   width: min(360px, calc(100vw - 28px));
   display: grid;
   gap: 6px;
@@ -520,6 +520,10 @@ body {
 .shop-modal-inner {
   width: min(1120px, calc(100vw - 32px));
   max-height: min(84vh, 820px);
+}
+
+.gear-modal-inner {
+  width: min(620px, calc(100vw - 32px));
 }
 
 .shop-title-row {
@@ -676,13 +680,165 @@ body {
   max-width: min(360px, calc(100vw - 36px));
 }
 
-#fog-overlay {
+#weather-effects,
+.weather-effect {
   position: fixed;
   inset: 0;
-  background: rgba(210, 220, 220, 0.18);
-  backdrop-filter: blur(1px);
   pointer-events: none;
   z-index: 4;
+  overflow: hidden;
+}
+
+.weather-effect.hidden {
+  display: none;
+}
+
+.weather-effect::before,
+.weather-effect::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  pointer-events: none;
+}
+
+.weather-rain {
+  background: linear-gradient(rgba(55, 95, 110, 0.12), rgba(55, 95, 110, 0.2));
+  backdrop-filter: saturate(0.9) brightness(0.94);
+}
+
+.weather-rain::before,
+.weather-thunderstorm::before {
+  background-image: repeating-linear-gradient(105deg, transparent 0 18px, rgba(185, 230, 255, 0.42) 19px 21px, transparent 22px 42px);
+  background-size: 28px 92px;
+  animation: rain-fall 0.62s linear infinite;
+  opacity: 0.58;
+}
+
+.weather-heatwave {
+  background: rgba(255, 132, 48, 0.16);
+  backdrop-filter: sepia(0.2) saturate(1.22) contrast(1.03);
+  animation: heat-pulse 2.2s ease-in-out infinite;
+}
+
+.weather-heatwave::before {
+  background: repeating-linear-gradient(0deg, transparent 0 15px, rgba(255, 217, 140, 0.1) 16px 18px, transparent 19px 34px);
+  animation: heat-shimmer 1.4s ease-in-out infinite;
+  opacity: 0.72;
+}
+
+.weather-thunderstorm {
+  background: rgba(30, 34, 74, 0.24);
+  backdrop-filter: brightness(0.78) saturate(0.86);
+}
+
+.weather-thunderstorm::after {
+  background: rgba(210, 230, 255, 0.44);
+  animation: lightning-flash 5s steps(1, end) infinite;
+  opacity: 0;
+}
+
+.weather-fog {
+  background:
+    radial-gradient(circle at 22% 30%, rgba(220, 235, 230, 0.28), transparent 34%),
+    radial-gradient(circle at 80% 62%, rgba(220, 235, 230, 0.2), transparent 38%),
+    rgba(210, 220, 220, 0.18);
+  backdrop-filter: blur(1.8px) saturate(0.78);
+}
+
+.weather-fog::before {
+  background: linear-gradient(90deg, transparent, rgba(235, 245, 242, 0.2), transparent);
+  animation: fog-drift 8s ease-in-out infinite alternate;
+}
+
+.weather-golden-hour,
+.weather-market-boom {
+  background: radial-gradient(circle at 50% 18%, rgba(255, 209, 102, 0.24), transparent 46%), rgba(255, 204, 84, 0.11);
+  backdrop-filter: saturate(1.18) brightness(1.05);
+}
+
+.weather-meteor-shower {
+  background: rgba(45, 34, 72, 0.15);
+  backdrop-filter: brightness(0.9) saturate(1.08);
+}
+
+.weather-meteor-shower::before {
+  background-image: repeating-linear-gradient(132deg, transparent 0 54px, rgba(255, 224, 178, 0.75) 55px 58px, transparent 59px 110px);
+  background-size: 190px 160px;
+  animation: meteor-streak 2.4s linear infinite;
+  opacity: 0.46;
+}
+
+.weather-bee-swarm {
+  background: rgba(255, 220, 86, 0.08);
+}
+
+.weather-bee-swarm::before {
+  background:
+    radial-gradient(circle, rgba(255, 210, 58, 0.75) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(80, 50, 12, 0.55) 0 1px, transparent 2px);
+  background-size: 42px 42px, 57px 57px;
+  animation: bee-drift 4.6s linear infinite;
+  opacity: 0.55;
+}
+
+.weather-frost-night {
+  background: rgba(155, 210, 255, 0.18);
+  backdrop-filter: saturate(0.78) brightness(0.95);
+}
+
+.weather-frost-night::before {
+  background-image:
+    radial-gradient(circle, rgba(230, 250, 255, 0.75) 0 1px, transparent 2px),
+    radial-gradient(circle, rgba(210, 236, 255, 0.52) 0 1px, transparent 2px);
+  background-size: 34px 34px, 53px 53px;
+  animation: frost-fall 5s linear infinite;
+}
+
+.weather-market-crash {
+  background: rgba(36, 43, 45, 0.24);
+  backdrop-filter: saturate(0.55) brightness(0.76);
+}
+
+@keyframes rain-fall {
+  from { transform: translate3d(-18px, -70px, 0); }
+  to { transform: translate3d(18px, 70px, 0); }
+}
+
+@keyframes heat-pulse {
+  0%, 100% { opacity: 0.94; }
+  50% { opacity: 0.72; }
+}
+
+@keyframes heat-shimmer {
+  0%, 100% { transform: translateX(-10px) skewX(-2deg); }
+  50% { transform: translateX(10px) skewX(2deg); }
+}
+
+@keyframes lightning-flash {
+  0%, 92%, 100% { opacity: 0; }
+  93% { opacity: 0.55; }
+  94% { opacity: 0; }
+  96% { opacity: 0.32; }
+}
+
+@keyframes fog-drift {
+  from { transform: translateX(-12%); }
+  to { transform: translateX(12%); }
+}
+
+@keyframes meteor-streak {
+  from { transform: translate3d(90px, -90px, 0); }
+  to { transform: translate3d(-120px, 120px, 0); }
+}
+
+@keyframes bee-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(57px, 42px, 0); }
+}
+
+@keyframes frost-fall {
+  from { transform: translateY(-24px); }
+  to { transform: translateY(24px); }
 }
 
 .holding.shield {
@@ -696,10 +852,87 @@ body {
 }
 
 @media (max-width: 820px) {
+  #status-bar {
+    top: 8px;
+    right: 8px;
+    left: auto;
+    transform: none;
+    max-width: 145px;
+    gap: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  #hint-bar {
+    top: 8px;
+    left: 8px;
+    right: 160px;
+    max-width: none;
+    white-space: normal;
+    line-height: 1.2;
+    font-size: 11px;
+  }
+
   #top-bar {
     top: 42px;
-    max-width: calc(100vw - 18px);
+    left: 8px;
+    right: 8px;
+    transform: none;
+    max-width: none;
+    padding: 7px 8px;
+    gap: 8px;
     overflow-x: auto;
+    font-size: 12px;
+  }
+
+  #money-panel,
+  #crop-panel,
+  #weather-panel {
+    font-size: 12px;
+  }
+
+  #gear-panel {
+    top: 96px;
+    left: 8px;
+    right: 8px;
+    transform: none;
+    justify-content: center;
+  }
+
+  #inventory-panel {
+    left: 14px;
+    bottom: 108px;
+    width: calc(100vw - 28px);
+  }
+
+  #hotbar {
+    bottom: 20px;
+    width: calc(100vw - 28px);
+  }
+
+  #mode-indicator {
+    bottom: 70px;
+    max-width: calc(100vw - 28px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #interact-hint {
+    bottom: 168px;
+  }
+
+  #toast-stack {
+    top: 140px;
+    right: 10px;
+    bottom: auto;
+    max-width: min(220px, calc(100vw - 20px));
+  }
+
+  #toast-stack .toast {
+    max-width: 100%;
+    font-size: 12px;
+    padding: 7px 10px;
   }
 
   .shop-grid {

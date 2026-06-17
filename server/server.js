@@ -15,7 +15,7 @@ const express = require('express');
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const SERVER_VERSION = 'systems-expansion-2026-06-17-1';
+const SERVER_VERSION = 'visual-weather-stolen-2026-06-17-1';
 
 // Create Express app for HTTP + WebSocket
 const app = express();
@@ -42,6 +42,8 @@ app.get('/version', (req, res) => {
       weatherEvents: true,
       cropQuality: true,
       expandedSeeds: true,
+      heldStolenVisuals: true,
+      perennialCrops: true,
     },
   });
 });
@@ -204,6 +206,17 @@ const GEAR_CATALOG = {
   shotgun: { name: 'Shotgun', type: 'weapon', buyPrice: 900, damage: 50, ammoOnBuy: 12, range: 7 },
   minigun: { name: 'Minigun', type: 'weapon', buyPrice: 1800, damage: 16, ammoOnBuy: 80, range: 14 },
 };
+
+const PERENNIAL_SEEDS = new Set([
+  'strawberry',
+  'blueberry',
+  'goldenApple',
+  'dragonfruit',
+  'frostBerry',
+  'crystalBlueberry',
+  'shadowDragonfruit',
+  'bountyFruit',
+]);
 
 const WEAPON_CATALOG = {
   pistol: { name: 'Pistol', damage: 34, range: 11 },
@@ -503,13 +516,13 @@ function getPlayerPublic(player) {
       originZ: player.plotOrigin.z,
       cells: plot.cells.map(cell => {
         if (!cell.plant) return { row: cell.row, col: cell.col, plant: null };
-        const { seedType, stage, mutated, mutationName, quality, plantedAt, growTime } = cell.plant;
+        const { seedType, stage, mutated, mutationName, quality, plantedAt, growTime, regrowing, perennial } = cell.plant;
         const elapsed = Date.now() - plantedAt;
         const progress = Math.min((elapsed * getWeatherGrowMultiplier(seedType)) / growTime, 1);
         return {
           row: cell.row,
           col: cell.col,
-          plant: { seedType, stage, mutated, mutationName, quality, progress },
+          plant: { seedType, stage, mutated, mutationName, quality, progress, regrowing, perennial },
         };
       }),
     })),
@@ -639,7 +652,7 @@ wss.on('connection', (ws) => {
   send(ws, {
     type: 'welcome',
     playerId,
-    serverFeatures: { positionUpdates: true, serverPlots: true },
+    serverFeatures: { positionUpdates: true, serverPlots: true, heldStolenVisuals: true, perennialCrops: true },
     state: getPlayerPublic(player),
     shop: { 
       catalog: SEED_CATALOG,
@@ -789,6 +802,8 @@ function handleMessage(player, msg) {
         mutated: false,
         quality: null,
         mutationName: null,
+        perennial: isPerennialSeed(seedType),
+        regrowing: false,
       };
       sendState(player);
       broadcastAllGardens();
@@ -805,8 +820,7 @@ function handleMessage(player, msg) {
       const maxStages = SEED_CATALOG[cell.plant.seedType]?.stages ?? 4;
       if (cell.plant.stage < maxStages - 1) return sendError(player, 'Plant not ready yet');
 
-      const { seedType, quality, mutationName } = cell.plant;
-      cell.plant = null;
+      const { seedType, quality, mutationName } = collectReadyPlant(cell);
       addCrop(player, seedType, quality, mutationName);
       send(player.ws, { type: 'harvestPopup', seedType, quality: quality || 'Normal', mutationName });
       sendState(player);
@@ -827,8 +841,7 @@ function handleMessage(player, msg) {
       if (!cell || !cell.plant) return sendError(player, 'Nothing to steal');
       const maxStages = SEED_CATALOG[cell.plant.seedType]?.stages ?? 4;
       if (cell.plant.stage < maxStages - 1) return sendError(player, 'That crop is not ready yet');
-      const { seedType, quality, mutationName } = cell.plant;
-      cell.plant = null;
+      const { seedType, quality, mutationName } = collectReadyPlant(cell);
       player.holdingStolen = { ownerId, seedType, quality: quality || 'Normal', mutationName };
       sendState(player);
       sendState(owner);
@@ -918,12 +931,52 @@ function updatePlayerPosition(player, msg) {
 
 function maybeDepositStolenCrop(player) {
   if (!player.holdingStolen) return;
-  if (distance(player.position, getSpawnPosition(player.plotOrigin)) > 4) return;
+  if (!isAtOwnPlot(player)) return;
   const { seedType, quality, mutationName } = player.holdingStolen;
   addCrop(player, seedType, quality, mutationName);
   player.holdingStolen = null;
   send(player.ws, { type: 'stolenDeposited', seedType });
   sendState(player);
+}
+
+function isAtOwnPlot(player) {
+  const gridSize = GRID_SIZES[player.expansionLevel] || 3;
+  const plotRadius = Math.max(5.5, gridSize * 0.85 + 2.6);
+  return distance(player.position, player.plotOrigin) <= plotRadius
+    || distance(player.position, getSpawnPosition(player.plotOrigin)) <= 4;
+}
+
+function collectReadyPlant(cell) {
+  const { seedType, quality, mutationName } = cell.plant;
+  if (isPerennialSeed(seedType)) {
+    startPerennialRegrowth(cell, seedType);
+  } else {
+    cell.plant = null;
+  }
+  return { seedType, quality: quality || 'Normal', mutationName };
+}
+
+function isPerennialSeed(seedType) {
+  return PERENNIAL_SEEDS.has(seedType);
+}
+
+function startPerennialRegrowth(cell, seedType) {
+  const seed = SEED_CATALOG[seedType] || {};
+  const maxStages = seed.stages ?? 4;
+  const regrowTime = Math.max(12000, Math.round((seed.growTime || 30000) * 0.45));
+  const baseStage = Math.max(1, Math.min(maxStages - 2, Math.floor(maxStages * 0.45)));
+  const backdate = Math.round(regrowTime * (baseStage / maxStages));
+  cell.plant = {
+    seedType,
+    stage: baseStage,
+    plantedAt: Date.now() - backdate,
+    growTime: regrowTime,
+    mutated: false,
+    quality: null,
+    mutationName: null,
+    regrowing: true,
+    perennial: true,
+  };
 }
 
 function respawnPlayer(player) {

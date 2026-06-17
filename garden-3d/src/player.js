@@ -4,6 +4,7 @@
  */
 
 import * as THREE from 'three';
+import { SEED_CATALOG, plantColor } from './seeds.js';
 
 const SPEED        = 7.0;   // units per second
 const BODY_COLOR   = 0x4cc9f0;
@@ -36,6 +37,7 @@ export function createPlayer(scene) {
   root.add(shadow);
 
   scene.add(root);
+  let heldItem = null;
 
   // ── Input state ──────────────────────────────────────────────────────────
   const keys = { w: false, a: false, s: false, d: false,
@@ -88,6 +90,17 @@ export function createPlayer(scene) {
     root.position.z = z;
   }
 
+  function setHeldItem(item) {
+    if (heldItem) {
+      root.remove(heldItem);
+      disposeMeshGroup(heldItem);
+      heldItem = null;
+    }
+    if (!item?.seedType) return;
+    heldItem = makeHeldCrop(item);
+    root.add(heldItem);
+  }
+
   /** Distance from player to a world-space point */
   function distanceTo(wx, wz) {
     const dx = root.position.x - wx;
@@ -95,5 +108,49 @@ export function createPlayer(scene) {
     return Math.sqrt(dx * dx + dz * dz);
   }
 
-  return { root, update, getPosition, setPosition, distanceTo };
+  return { root, update, getPosition, setPosition, setHeldItem, distanceTo };
+}
+
+function makeHeldCrop(item) {
+  const info = SEED_CATALOG[item.seedType] || {};
+  const color = plantColor(item.seedType, 4, 4, item.quality, item.mutationName) || info.color || 0xffd166;
+  const group = new THREE.Group();
+  group.position.set(0, 0.95, 0.58);
+
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.26, 12, 8),
+    new THREE.MeshLambertMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: item.mutationName || item.quality === 'Gold' || item.quality === 'Rainbow' ? 0.38 : 0.12,
+    })
+  );
+  glow.scale.y = item.quality === 'Giant' ? 1.35 : 1;
+  group.add(glow);
+
+  const leaf = new THREE.Mesh(
+    new THREE.ConeGeometry(0.12, 0.22, 5),
+    new THREE.MeshLambertMaterial({ color: info.stemColor || 0x52b788 })
+  );
+  leaf.position.set(0, 0.25, 0);
+  leaf.rotation.x = Math.PI;
+  group.add(leaf);
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.34, 0.025, 6, 18),
+    new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true, opacity: 0.5 })
+  );
+  ring.rotation.x = Math.PI / 2;
+  group.add(ring);
+
+  return group;
+}
+
+function disposeMeshGroup(group) {
+  group.traverse(obj => {
+    if (obj.isMesh) {
+      obj.geometry?.dispose();
+      obj.material?.dispose();
+    }
+  });
 }
