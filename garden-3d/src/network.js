@@ -5,10 +5,9 @@
  */
 
 // Determine WebSocket URL based on current location
-const SERVER_URL =
-  location.hostname === "localhost"
-    ? "ws://localhost:3000"
-    : "wss://garden-3d-production.up.railway.app";
+const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsHost = location.hostname === 'localhost' ? 'localhost:3000' : location.host;
+const SERVER_URL = `${wsProtocol}//${wsHost}`;
 
 let socket      = null;
 let connected   = false;
