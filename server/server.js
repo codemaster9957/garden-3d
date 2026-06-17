@@ -28,19 +28,14 @@ const wss = new WebSocketServer({ server });
 const distPath = path.join(__dirname, '../garden-3d/dist');
 app.use(express.static(distPath));
 
-// Fallback: serve index.html for any non-API routes (single-page app)
-app.get('*', (req, res) => {
-  // Don't redirect API routes like /health
-  if (req.path.startsWith('/health') || req.path.startsWith('/api')) {
-    res.status(404).json({ error: 'Not found' });
-    return;
-  }
-  res.sendFile(path.join(distPath, 'index.html'));
-});
-
-// Health check endpoint
+// Health check endpoint (must come BEFORE catch-all)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', players: players.size, uptime: process.uptime() });
+});
+
+// Fallback: serve index.html for any non-API routes (single-page app)
+app.all('*', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // Start HTTP server
