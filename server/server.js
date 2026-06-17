@@ -19,11 +19,24 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 // Create Express app for HTTP + WebSocket
 const app = express();
 const server = http.createServer(app);
+const path = require('path');
+
 // WebSocket server attached to HTTP server
 const wss = new WebSocketServer({ server });
 
-// Serve static files if garden-3d/dist exists (for serving compiled client)
-app.use(express.static('../garden-3d/dist'));
+// Serve static files from the built client
+const distPath = path.join(__dirname, '../garden-3d/dist');
+app.use(express.static(distPath));
+
+// Fallback: serve index.html for any non-API routes (single-page app)
+app.get('*', (req, res) => {
+  // Don't redirect API routes like /health
+  if (req.path.startsWith('/health') || req.path.startsWith('/api')) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  res.sendFile(path.join(distPath, 'index.html'));
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {

@@ -5,18 +5,10 @@
  */
 
 // Determine WebSocket URL based on current location
-const getWsUrl = () => {
-  // If we have a window (browser environment)
-  if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = import.meta.env.VITE_WS_URL || 
-                 `${protocol}//${window.location.hostname}:${window.location.port || (protocol === 'wss:' ? 443 : 80)}`;
-    return host;
-  }
-  return 'ws://localhost:3000';
-};
-
-const WS_URL = getWsUrl();
+const SERVER_URL =
+  location.hostname === "localhost"
+    ? "ws://localhost:3000"
+    : "wss://garden-3d-production.up.railway.app";
 
 let socket      = null;
 let connected   = false;
@@ -51,7 +43,7 @@ export function isConnected() { return connected; }
  */
 export function connect() {
   return new Promise((resolve, reject) => {
-    socket = new WebSocket(WS_URL);
+    socket = new WebSocket(SERVER_URL);
 
     socket.addEventListener('open', () => {
       connected = true;
