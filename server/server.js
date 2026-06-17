@@ -34,7 +34,7 @@ app.get('/health', (req, res) => {
 });
 
 // Fallback: serve index.html for any non-API routes (single-page app)
-app.all('*', (req, res) => {
+app.all(/.*/,  (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
