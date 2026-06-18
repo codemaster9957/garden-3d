@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { SEED_CATALOG, plantColor } from './seeds.js';
 
 const SPEED        = 7.0;   // units per second
+const JUMP_SPEED   = 6.5;
+const GRAVITY      = 18;
 const BODY_COLOR   = 0x4cc9f0;
 const HEAD_COLOR   = 0xffe0b2;
 const SHADOW_COLOR = 0x000000;
@@ -15,18 +17,26 @@ export function createPlayer(scene) {
   const root = new THREE.Group();
 
   // Body
-  const bodyGeo = new THREE.BoxGeometry(0.55, 0.75, 0.35);
-  const bodyMat = new THREE.MeshLambertMaterial({ color: BODY_COLOR });
+  const bodyGeo = new THREE.CapsuleGeometry(0.24, 0.48, 6, 12);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: BODY_COLOR, roughness: 0.62 });
   const body    = new THREE.Mesh(bodyGeo, bodyMat);
   body.position.y = 0.65;
   root.add(body);
 
   // Head
-  const headGeo = new THREE.BoxGeometry(0.42, 0.42, 0.42);
-  const headMat = new THREE.MeshLambertMaterial({ color: HEAD_COLOR });
+  const headGeo = new THREE.SphereGeometry(0.24, 16, 12);
+  const headMat = new THREE.MeshStandardMaterial({ color: HEAD_COLOR, roughness: 0.55 });
   const head    = new THREE.Mesh(headGeo, headMat);
   head.position.y = 1.27;
   root.add(head);
+
+  const hat = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.27, 0.2, 0.13, 16),
+    new THREE.MeshStandardMaterial({ color: 0x2d6a4f, roughness: 0.72 })
+  );
+  hat.position.y = 1.52;
+  root.add(hat);
+  setShadowCasting(root);
 
   // Shadow blob
   const shadowGeo = new THREE.CircleGeometry(0.32, 10);
@@ -45,13 +55,18 @@ export function createPlayer(scene) {
   let petKey = '';
 
   // ── Input state ──────────────────────────────────────────────────────────
-  const keys = { w: false, a: false, s: false, d: false,
+  const keys = { w: false, a: false, s: false, d: false, ' ': false,
                  ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
 
-  window.addEventListener('keydown', e => { if (e.key in keys) { keys[e.key] = true;  e.preventDefault(); } });
+  window.addEventListener('keydown', e => {
+    if (isTyping()) return;
+    if (e.key in keys) { keys[e.key] = true;  e.preventDefault(); }
+  });
   window.addEventListener('keyup',   e => { if (e.key in keys) { keys[e.key] = false; } });
 
   let facingAngle = 0; // radians, Y-axis
+  let verticalVelocity = 0;
+  let grounded = true;
 
   function update(dt, collides = null, cameraYaw = Math.PI) {
     let inputX = 0, inputZ = 0;
@@ -90,6 +105,19 @@ export function createPlayer(scene) {
         facingAngle = Math.atan2(dx, dz);
         root.rotation.y = facingAngle;
       }
+    }
+
+    if (keys[' '] && grounded) {
+      verticalVelocity = JUMP_SPEED;
+      grounded = false;
+      keys[' '] = false;
+    }
+    verticalVelocity -= GRAVITY * dt;
+    root.position.y = Math.max(0, root.position.y + verticalVelocity * dt);
+    if (root.position.y <= 0) {
+      root.position.y = 0;
+      verticalVelocity = 0;
+      grounded = true;
     }
 
     // Subtle body bob
@@ -163,6 +191,11 @@ export function createPlayer(scene) {
   }
 
   return { root, update, getPosition, setPosition, setHeldItem, setGunEquipped, setAimAngle, setPet, distanceTo };
+}
+
+function isTyping() {
+  const el = document.activeElement;
+  return el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable;
 }
 
 function makeGun(weaponType) {
@@ -279,6 +312,15 @@ function disposeMeshGroup(group) {
     if (obj.isMesh) {
       obj.geometry?.dispose();
       obj.material?.dispose();
+    }
+  });
+}
+
+function setShadowCasting(group) {
+  group.traverse(obj => {
+    if (obj.isMesh) {
+      obj.castShadow = true;
+      obj.receiveShadow = true;
     }
   });
 }

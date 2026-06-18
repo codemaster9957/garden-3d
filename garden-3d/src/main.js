@@ -5,12 +5,12 @@
 
 import './style.css';
 import * as THREE       from 'three';
-import { initScene, getScene, getCamera, getRenderer, updatePointer, pointerGroundPoint, raycastCells, renderFrame, setCameraTarget, getCameraYaw } from './scene.js';
+import { initScene, getScene, getCamera, getRenderer, updatePointer, pointerGroundPoint, raycastCells, renderFrame, setCameraTarget, getCameraYaw, getCameraForward } from './scene.js';
 import { createGarden, cellWorldOffset } from './garden.js';
 import { createPlayer } from './player.js';
 import { createWorld } from './world.js';
 import { SEED_CATALOG } from './seeds.js';
-import { buildHUD, initHotbar, initKeyboard, updateMoney, updateSeeds, updateCrops, updateShop, updateSellCrops, updateExpansion, updatePlayerInventory, updateWeather, setConnectionStatus, showToast, getSelectedSeed, isHarvestMode, getSelectedGear, clearSelectedGear, openShopModal, openGearShopModal, openPetShopModal, openSellModal, buildShopModal, buildGearShopModal, buildPetShopModal, buildSellModal, setGunMode, setInteractHint } from './ui.js';
+import { buildHUD, initHotbar, initKeyboard, updateMoney, updateSeeds, updateCrops, updateShop, updateSellCrops, updateExpansion, updatePlayerInventory, updateWeather, setConnectionStatus, showToast, getSelectedSeed, isHarvestMode, getSelectedGear, clearSelectedGear, openShopModal, openGearShopModal, openPetShopModal, openSellModal, buildShopModal, buildGearShopModal, buildPetShopModal, buildSellModal, setGunMode, setInteractHint, addChatMessage } from './ui.js';
 import { getRemoteCellInfo, getRemoteCellMeshes, updateOtherPlayers, updateRemotePlayerMove } from './otherPlayers.js';
 import { initMusic, setMusicWeather } from './audio.js';
 import * as Net from './network.js';
@@ -167,6 +167,10 @@ Net.onMessage('bulletFired', (msg) => {
   spawnBullet(msg);
 });
 
+Net.onMessage('chatMessage', (msg) => {
+  addChatMessage(msg.playerId, msg.message);
+});
+
 Net.onMessage('gearUsed', (msg) => {
   showToast(`${msg.itemType} active for ${Math.round(msg.durationMs / 1000)}s`, 'success');
 });
@@ -219,7 +223,7 @@ canvas.addEventListener('click', (event) => {
   if (!myGarden || !Net.isConnected()) return;
 
   if (gunEquipped) {
-    updateAimFromEvent(event);
+    updateAimFromCamera();
     Net.shootAt(aimDirection);
     return;
   }
@@ -266,7 +270,7 @@ canvas.addEventListener('click', (event) => {
 
 canvas.addEventListener('mousemove', (event) => {
   if (!myGarden || !Net.isConnected()) return;
-  if (gunEquipped) updateAimFromEvent(event);
+  if (gunEquipped) updateAimFromCamera();
   updatePointer(event, canvas);
   const hits = raycastCells(myCellMeshes);
   if (!hits.length) { cropHoverHint = null; return; }
@@ -282,6 +286,7 @@ canvas.addEventListener('mousemove', (event) => {
 
 // ─── World interaction / E key ─────────────────────────────────────────────────
 window.addEventListener('keydown', (event) => {
+  if (isTyping()) return;
   if (event.key === 'f' || event.key === 'F') {
     if (!player) return;
     gunEquipped = !gunEquipped;
@@ -331,6 +336,21 @@ function updateAimFromEvent(event) {
   aimDirection = { x: dx / length, z: dz / length };
   aimAngle = Math.atan2(aimDirection.x, aimDirection.z);
   player.setAimAngle?.(aimAngle);
+}
+
+function updateAimFromCamera() {
+  if (!player) return;
+  const forward = getCameraForward();
+  const length = Math.hypot(forward.x, forward.z);
+  if (length < 0.05) return;
+  aimDirection = { x: forward.x / length, z: forward.z / length };
+  aimAngle = Math.atan2(aimDirection.x, aimDirection.z);
+  player.setAimAngle?.(aimAngle);
+}
+
+function isTyping() {
+  const el = document.activeElement;
+  return el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable;
 }
 
 function isCellInRange(cellInfo) {
@@ -393,6 +413,7 @@ function loop() {
     player.update(dt, world?.collides, getCameraYaw());
     const pos = player.getPosition();
     setCameraTarget(pos.x, pos.z);
+    if (gunEquipped) updateAimFromCamera();
     updateWorldUI();
     if (Net.isConnected() && serverFeatures.positionUpdates && now - lastPositionSent > 150) {
       Net.updatePosition(pos.x, pos.z, aimAngle, gunEquipped);

@@ -59,14 +59,16 @@ const _cameraState = {
 
 export function initScene(canvas) {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x3d7a45);
+  scene.background = new THREE.Color(0x8fcf9a);
+  scene.fog = new THREE.Fog(0x8fcf9a, 36, 120);
 
   // Ground plane (grass texture via color)
   const groundGeo = new THREE.PlaneGeometry(300, 300);
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x4a9c58 });
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x4f9f58, roughness: 0.95, metalness: 0 });
   const ground    = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.11;
+  ground.receiveShadow = true;
   scene.add(ground);
 
   // Decorative grass patches
@@ -75,7 +77,7 @@ export function initScene(canvas) {
       0.3 + Math.random() * 0.5,
       0.3 + Math.random() * 0.5
     );
-    const pMat = new THREE.MeshLambertMaterial({ color: 0x3d8c46 });
+    const pMat = new THREE.MeshStandardMaterial({ color: 0x3d8c46, roughness: 1 });
     const p = new THREE.Mesh(pGeo, pMat);
     p.rotation.x = -Math.PI / 2;
     p.position.set(
@@ -94,13 +96,22 @@ export function initScene(canvas) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.06;
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.75);
+  const ambient = new THREE.HemisphereLight(0xeaffd8, 0x527a55, 1.05);
   scene.add(ambient);
 
-  const sun = new THREE.DirectionalLight(0xfffbe6, 0.9);
-  sun.position.set(8, 20, 10);
+  const sun = new THREE.DirectionalLight(0xfff1c4, 1.45);
+  sun.position.set(12, 24, 14);
   sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -34;
+  sun.shadow.camera.right = 34;
+  sun.shadow.camera.top = 34;
+  sun.shadow.camera.bottom = -34;
   scene.add(sun);
 
   initCameraControls(canvas);
@@ -119,6 +130,13 @@ export function setCameraTarget(x, z) {
 
 export function getCameraYaw() {
   return _cameraState.yaw;
+}
+
+export function getCameraForward() {
+  return {
+    x: -Math.sin(_cameraState.yaw),
+    z: -Math.cos(_cameraState.yaw),
+  };
 }
 
 export function updateCamera() {

@@ -142,6 +142,10 @@ export function shootAt(direction) {
   send({ type: 'shootAt', direction });
 }
 
+export function sendChat(message) {
+  send({ type: 'chatMessage', message });
+}
+
 export function stealPlant(ownerId, plotId, cellRow, cellCol) {
   send({ type: 'stealPlant', ownerId, plotId, cellRow, cellCol });
 }

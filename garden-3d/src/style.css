@@ -215,6 +215,62 @@ body {
 }
 #mode-indicator.harvest { border-color: #e63946; color: #ff6b7a; }
 
+#chat-panel {
+  position: absolute;
+  left: 14px;
+  bottom: 238px;
+  width: min(340px, calc(100vw - 28px));
+  display: grid;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+#chat-log {
+  display: grid;
+  align-content: end;
+  gap: 4px;
+  min-height: 118px;
+  max-height: 118px;
+  overflow: hidden;
+  padding: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(11, 24, 19, 0.58);
+  color: var(--cream);
+  font-size: 12px;
+}
+
+.chat-line {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+}
+
+.chat-line strong {
+  color: var(--gold);
+  flex: 0 0 auto;
+}
+
+.chat-line span {
+  overflow-wrap: anywhere;
+}
+
+#chat-input {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 8px;
+  background: rgba(15, 35, 25, 0.88);
+  color: var(--cream);
+  padding: 8px 10px;
+  outline: none;
+  font-size: 12px;
+}
+
+#chat-input:focus {
+  border-color: var(--gold);
+}
+
 /* ── Hint ─────────────────────────────────────────────────────────────────── */
 #hint,
 #interact-hint {
@@ -915,6 +971,16 @@ body {
     left: 14px;
     bottom: 108px;
     width: calc(100vw - 28px);
+  }
+
+  #chat-panel {
+    bottom: 204px;
+    width: min(300px, calc(100vw - 28px));
+  }
+
+  #chat-log {
+    min-height: 80px;
+    max-height: 80px;
   }
 
   #hotbar {

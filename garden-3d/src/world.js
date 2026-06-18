@@ -99,6 +99,7 @@ export function createWorld(scene) {
   const leaderboard = createBoard(scene, 6, -12, 0x5f3b20, 'Leaderboard');
 
   const buildings = [seedShop, gearShop, petShop, sellStand, weatherBoard, leaderboard];
+  setWorldShadows(scene);
 
   return {
     seedShop,
@@ -111,6 +112,14 @@ export function createWorld(scene) {
       return buildings.some(building => building.collides(x, z));
     },
   };
+}
+
+function setWorldShadows(scene) {
+  scene.traverse(obj => {
+    if (!obj.isMesh) return;
+    obj.castShadow = obj.position.y > -0.05;
+    obj.receiveShadow = true;
+  });
 }
 
 function createBoard(scene, x, z, color, labelText) {
@@ -184,12 +193,33 @@ function createDecorations(scene) {
 }
 
 function createTree(scene, x, z) {
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.25, 1.4, 6), new THREE.MeshLambertMaterial({ color: 0x6b3f1d }));
-  trunk.position.set(x, 0.6, z);
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b3f1d });
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0x2f7d32 });
+  const darkLeafMat = new THREE.MeshLambertMaterial({ color: 0x256b2d });
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.29, 1.55, 8), trunkMat);
+  trunk.position.set(x, 0.68, z);
+  trunk.rotation.z = 0.05;
   scene.add(trunk);
-  const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 6), new THREE.MeshLambertMaterial({ color: 0x2f7d32 }));
-  leaves.position.set(x, 1.6, z);
-  scene.add(leaves);
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2 + 0.2;
+    const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.07, 0.56, 6), trunkMat);
+    branch.position.set(x + Math.cos(angle) * 0.16, 1.05 + (i % 2) * 0.18, z + Math.sin(angle) * 0.16);
+    branch.rotation.z = Math.PI / 2.7;
+    branch.rotation.y = -angle;
+    scene.add(branch);
+  }
+  [
+    [0, 0.02, 0, 0.95, 0.74, leafMat],
+    [-0.42, -0.08, 0.18, 0.62, 0.62, darkLeafMat],
+    [0.42, -0.08, -0.16, 0.66, 0.58, leafMat],
+    [0.04, 0.36, 0.02, 0.58, 0.5, leafMat],
+    [0.05, -0.16, -0.42, 0.55, 0.55, darkLeafMat],
+  ].forEach(([ox, oy, oz, radius, sy, mat]) => {
+    const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 1), mat);
+    leaves.position.set(x + ox, 1.55 + oy, z + oz);
+    leaves.scale.set(1.08, sy, 0.96);
+    scene.add(leaves);
+  });
 }
 
 function createRock(scene, x, z) {
@@ -282,10 +312,19 @@ function createFlowerBed(scene, x, z, color) {
 }
 
 function createBush(scene, x, z) {
-  const bush = new THREE.Mesh(new THREE.DodecahedronGeometry(0.48, 1), new THREE.MeshLambertMaterial({ color: 0x2f7d32 }));
-  bush.position.set(x, 0.34, z);
-  bush.scale.set(1.35, 0.75, 1);
-  scene.add(bush);
+  const mats = [
+    new THREE.MeshLambertMaterial({ color: 0x2f7d32 }),
+    new THREE.MeshLambertMaterial({ color: 0x256b2d }),
+  ];
+  for (let i = 0; i < 7; i++) {
+    const angle = (i / 7) * Math.PI * 2;
+    const radius = i === 0 ? 0 : 0.38;
+    const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(i === 0 ? 0.5 : 0.34, 1), mats[i % 2]);
+    bush.position.set(x + Math.cos(angle) * radius, 0.32 + (i % 3) * 0.035, z + Math.sin(angle) * radius);
+    bush.scale.set(1.18, 0.62, 0.95);
+    bush.rotation.y = angle;
+    scene.add(bush);
+  }
 }
 
 /**

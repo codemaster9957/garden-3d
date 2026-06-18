@@ -3,7 +3,7 @@
  */
 
 import { SEED_CATALOG, SEED_KEYS, seedColorHex, seedIcon, rarityColor, rarityRank } from './seeds.js';
-import { buySeed, buyGear, buyPet, equipPet, equipWeapon, sellAll, expandGarden } from './network.js';
+import { buySeed, buyGear, buyPet, equipPet, equipWeapon, sellAll, expandGarden, sendChat } from './network.js';
 
 const EXPANSION_COSTS = [500, 1000, 5000, 10000];
 const QUALITY_MULTIPLIERS = { normal: 1, silver: 1.25, gold: 1.6, rainbow: 2.25, giant: 2.75, mutated: 2 };
@@ -65,13 +65,18 @@ export function buildHUD() {
     <div id="inventory-panel"></div>
     <div id="hotbar"></div>
     <div id="mode-indicator"></div>
+    <div id="chat-panel">
+      <div id="chat-log"></div>
+      <input id="chat-input" type="text" maxlength="120" placeholder="Press Enter to chat" autocomplete="off" />
+    </div>
     <div id="interact-hint" class="hidden"></div>
-    <div id="hint-bar">WASD move | right/middle drag camera | wheel zoom | E interact | H harvest/steal | F gun</div>
+    <div id="hint-bar">WASD move | Space jump | right/middle drag camera | wheel zoom | Enter chat | E interact | H harvest/steal | F gun</div>
     <div id="weather-effects" class="weather-effect hidden"></div>
     <div id="toast-stack"></div>
   `;
   document.body.appendChild(hud);
   document.getElementById('expand-btn')?.addEventListener('click', expandGarden);
+  initChat();
   setInterval(_renderTimers, 500);
   return hud;
 }
@@ -136,6 +141,7 @@ function _refreshHotbar() {
 
 export function initKeyboard() {
   window.addEventListener('keydown', e => {
+    if (isTyping()) return;
     if (e.key === 'h' || e.key === 'H') { toggleHarvestMode(); return; }
     const key = SEED_KEYS.find(seedKey => SEED_CATALOG[seedKey].hotkey === e.key);
     if (key) _selectSeed(key);
@@ -234,6 +240,51 @@ export function showToast(text, type = 'info') {
   t.textContent = text;
   stack.appendChild(t);
   setTimeout(() => t.remove(), 3600);
+}
+
+export function addChatMessage(playerId, message) {
+  const log = document.getElementById('chat-log');
+  if (!log || !message) return;
+  const row = document.createElement('div');
+  row.className = 'chat-line';
+  const name = document.createElement('strong');
+  name.textContent = playerId || 'Player';
+  const text = document.createElement('span');
+  text.textContent = message;
+  row.append(name, text);
+  log.appendChild(row);
+  while (log.children.length > 8) log.firstElementChild?.remove();
+  log.scrollTop = log.scrollHeight;
+}
+
+function initChat() {
+  const input = document.getElementById('chat-input');
+  if (!input) return;
+  window.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    if (document.activeElement !== input) {
+      input.focus();
+      event.preventDefault();
+      return;
+    }
+    const message = input.value.trim();
+    if (message) sendChat(message);
+    input.value = '';
+    input.blur();
+    event.preventDefault();
+  });
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      input.value = '';
+      input.blur();
+      event.preventDefault();
+    }
+  });
+}
+
+function isTyping() {
+  const el = document.activeElement;
+  return el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable;
 }
 
 export function buildShopModal() {

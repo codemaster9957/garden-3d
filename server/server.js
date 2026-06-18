@@ -202,6 +202,17 @@ const POSITION_SYNC_MS = 100;
 // Make every plant seed at least 2x more expensive than the old economy.
 for (const info of Object.values(SEED_CATALOG)) {
   info.buyPrice *= 2;
+  const tier = {
+    Rare: { buy: 10000, sell: 25000 },
+    Epic: { buy: 100000, sell: 260000 },
+    Legendary: { buy: 1000000, sell: 2800000 },
+    Mythic: { buy: 5000000, sell: 14000000 },
+  }[info.rarity];
+  if (tier) {
+    const rarityOffset = Math.max(0, (info.rarityRank || 1) - 3);
+    info.buyPrice = Math.max(info.buyPrice, tier.buy + Math.round((info.buyPrice || 0) * (4 + rarityOffset)));
+    info.baseSellPrice = Math.max(info.baseSellPrice, tier.sell + Math.round((info.baseSellPrice || 0) * (6 + rarityOffset)));
+  }
 }
 
 const GEAR_CATALOG = {
@@ -735,6 +746,13 @@ function handleMessage(player, msg) {
   }
 
   switch (msg.type) {
+    case 'chatMessage': {
+      const message = sanitizeChatMessage(msg.message);
+      if (!message) return;
+      broadcast({ type: 'chatMessage', playerId: player.id, message, sentAt: Date.now() });
+      break;
+    }
+
     case 'buySeed': {
       const { seedType, qty = 1 } = msg;
       if (!SEED_CATALOG[seedType]) return sendError(player, 'Unknown seed type');
@@ -1248,3 +1266,7 @@ function sendError(player, message) {
   console.warn(`[error] ${player.id}: ${message}`);
 }
 
+function sanitizeChatMessage(value) {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim().slice(0, 120);
+}
