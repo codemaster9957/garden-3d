@@ -33,13 +33,29 @@ export function pointerGroundPoint(event, canvas) {
   return raycaster.ray.intersectPlane(ground, hit) ? { x: hit.x, z: hit.z } : null;
 }
 
-// How many world units the camera shows vertically
-const FRUST_H = 16;
+const CAMERA_DEFAULTS = {
+  distance: 9,
+  minDistance: 4.5,
+  maxDistance: 18,
+  yaw: Math.PI,
+  pitch: 0.52,
+  minPitch: 0.22,
+  maxPitch: 1.12,
+  targetHeight: 1.05,
+};
 
 let scene, camera, renderer;
 // Smooth camera target
-const _camTarget = new THREE.Vector3(0, 0, 0);
-const _camCurrent = new THREE.Vector3(0, 0, 0);
+const _camTarget = new THREE.Vector3(0, CAMERA_DEFAULTS.targetHeight, 0);
+const _camCurrent = new THREE.Vector3(0, CAMERA_DEFAULTS.targetHeight, 0);
+const _cameraState = {
+  distance: CAMERA_DEFAULTS.distance,
+  yaw: CAMERA_DEFAULTS.yaw,
+  pitch: CAMERA_DEFAULTS.pitch,
+  dragging: false,
+  lastX: 0,
+  lastY: 0,
+};
 
 export function initScene(canvas) {
   scene = new THREE.Scene();
@@ -70,13 +86,8 @@ export function initScene(canvas) {
     scene.add(p);
   }
 
-  const aspect = canvas.clientWidth / canvas.clientHeight;
-  camera = new THREE.OrthographicCamera(
-    -FRUST_H * aspect, FRUST_H * aspect,
-    FRUST_H, -FRUST_H,
-    0.1, 500
-  );
-  camera.position.set(0, 30, 12);
+  camera = new THREE.PerspectiveCamera(58, canvas.clientWidth / canvas.clientHeight, 0.1, 500);
+  camera.position.set(0, 6, 9);
   camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -92,6 +103,7 @@ export function initScene(canvas) {
   sun.castShadow = true;
   scene.add(sun);
 
+  initCameraControls(canvas);
   window.addEventListener('resize', () => onResize(canvas));
   return { scene, camera, renderer };
 }
@@ -102,26 +114,68 @@ export function getRenderer() { return renderer; }
 
 /** Call every frame with the player's world position to smoothly pan the camera. */
 export function setCameraTarget(x, z) {
-  _camTarget.set(x, 0, z);
+  _camTarget.set(x, CAMERA_DEFAULTS.targetHeight, z);
+}
+
+export function getCameraYaw() {
+  return _cameraState.yaw;
 }
 
 export function updateCamera() {
-  // Smooth follow with lerp
   _camCurrent.lerp(_camTarget, 0.08);
-  camera.position.x = _camCurrent.x;
-  camera.position.z = _camCurrent.z + 12;
-  camera.lookAt(_camCurrent.x, 0, _camCurrent.z);
+  const horizontalDistance = Math.cos(_cameraState.pitch) * _cameraState.distance;
+  camera.position.x = _camCurrent.x + Math.sin(_cameraState.yaw) * horizontalDistance;
+  camera.position.y = _camCurrent.y + Math.sin(_cameraState.pitch) * _cameraState.distance;
+  camera.position.z = _camCurrent.z + Math.cos(_cameraState.yaw) * horizontalDistance;
+  camera.lookAt(_camCurrent);
+}
+
+function initCameraControls(canvas) {
+  canvas.addEventListener('contextmenu', event => event.preventDefault());
+
+  canvas.addEventListener('pointerdown', event => {
+    if (event.button !== 1 && event.button !== 2) return;
+    _cameraState.dragging = true;
+    _cameraState.lastX = event.clientX;
+    _cameraState.lastY = event.clientY;
+    canvas.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+
+  canvas.addEventListener('pointermove', event => {
+    if (!_cameraState.dragging) return;
+    const dx = event.clientX - _cameraState.lastX;
+    const dy = event.clientY - _cameraState.lastY;
+    _cameraState.lastX = event.clientX;
+    _cameraState.lastY = event.clientY;
+    _cameraState.yaw -= dx * 0.006;
+    _cameraState.pitch = clamp(
+      _cameraState.pitch + dy * 0.004,
+      CAMERA_DEFAULTS.minPitch,
+      CAMERA_DEFAULTS.maxPitch
+    );
+  });
+
+  window.addEventListener('pointerup', event => {
+    _cameraState.dragging = false;
+    canvas.releasePointerCapture?.(event.pointerId);
+  });
+
+  canvas.addEventListener('wheel', event => {
+    _cameraState.distance = clamp(
+      _cameraState.distance + event.deltaY * 0.012,
+      CAMERA_DEFAULTS.minDistance,
+      CAMERA_DEFAULTS.maxDistance
+    );
+    event.preventDefault();
+  }, { passive: false });
 }
 
 function onResize(canvas) {
   if (!renderer || !camera) return;
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
-  const aspect = w / h;
-  camera.left   = -FRUST_H * aspect;
-  camera.right  =  FRUST_H * aspect;
-  camera.top    =  FRUST_H;
-  camera.bottom = -FRUST_H;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h, false);
 }
@@ -129,4 +183,8 @@ function onResize(canvas) {
 export function renderFrame() {
   updateCamera();
   renderer.render(scene, camera);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }

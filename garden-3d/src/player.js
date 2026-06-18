@@ -53,14 +53,24 @@ export function createPlayer(scene) {
 
   let facingAngle = 0; // radians, Y-axis
 
-  function update(dt, collides = null) {
-    let dx = 0, dz = 0;
-    if (keys.w || keys.ArrowUp)    dz -= 1;
-    if (keys.s || keys.ArrowDown)  dz += 1;
-    if (keys.a || keys.ArrowLeft)  dx -= 1;
-    if (keys.d || keys.ArrowRight) dx += 1;
+  function update(dt, collides = null, cameraYaw = Math.PI) {
+    let inputX = 0, inputZ = 0;
+    if (keys.w || keys.ArrowUp)    inputZ += 1;
+    if (keys.s || keys.ArrowDown)  inputZ -= 1;
+    if (keys.a || keys.ArrowLeft)  inputX -= 1;
+    if (keys.d || keys.ArrowRight) inputX += 1;
 
-    if (dx !== 0 || dz !== 0) {
+    let dx = 0, dz = 0;
+    if (inputX !== 0 || inputZ !== 0) {
+      const inputLen = Math.sqrt(inputX * inputX + inputZ * inputZ);
+      inputX /= inputLen; inputZ /= inputLen;
+
+      const forwardX = -Math.sin(cameraYaw);
+      const forwardZ = -Math.cos(cameraYaw);
+      const rightX = -Math.cos(cameraYaw);
+      const rightZ = Math.sin(cameraYaw);
+      dx = rightX * inputX + forwardX * inputZ;
+      dz = rightZ * inputX + forwardZ * inputZ;
       const len = Math.sqrt(dx * dx + dz * dz);
       dx /= len; dz /= len;
       const moveX = dx * SPEED * dt;
@@ -83,8 +93,8 @@ export function createPlayer(scene) {
     }
 
     // Subtle body bob
-    body.position.y = 0.65 + Math.sin(Date.now() * 0.007) * (dx !== 0 || dz !== 0 ? 0.04 : 0);
-    head.position.y = 1.27 + Math.sin(Date.now() * 0.007) * (dx !== 0 || dz !== 0 ? 0.04 : 0);
+    body.position.y = 0.65 + Math.sin(Date.now() * 0.007) * (inputX !== 0 || inputZ !== 0 ? 0.04 : 0);
+    head.position.y = 1.27 + Math.sin(Date.now() * 0.007) * (inputX !== 0 || inputZ !== 0 ? 0.04 : 0);
   }
 
   function getPosition() {

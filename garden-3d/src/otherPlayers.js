@@ -56,6 +56,7 @@ export function updateOtherPlayers(scene, allGardens, myPlayerId) {
         ownerId: gData.id,
         originX: entry.garden.originX,
         originZ: entry.garden.originZ,
+        gridSize: entry.garden.gridSize,
         ...entry.garden.cellMap.get(mesh),
       });
     }

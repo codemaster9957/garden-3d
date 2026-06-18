@@ -5,8 +5,8 @@
 
 import './style.css';
 import * as THREE       from 'three';
-import { initScene, getScene, getCamera, getRenderer, updatePointer, pointerGroundPoint, raycastCells, renderFrame, setCameraTarget } from './scene.js';
-import { createGarden } from './garden.js';
+import { initScene, getScene, getCamera, getRenderer, updatePointer, pointerGroundPoint, raycastCells, renderFrame, setCameraTarget, getCameraYaw } from './scene.js';
+import { createGarden, cellWorldOffset } from './garden.js';
 import { createPlayer } from './player.js';
 import { createWorld } from './world.js';
 import { SEED_CATALOG } from './seeds.js';
@@ -41,6 +41,7 @@ let gunEquipped = false;
 let aimAngle = 0;
 let aimDirection = { x: 0, z: 1 };
 const bullets = [];
+const CELL_INTERACT_RANGE = 2.25;
 
 // ─── Network ──────────────────────────────────────────────────────────────────
 setConnectionStatus(false, null);
@@ -236,6 +237,10 @@ canvas.addEventListener('click', (event) => {
 
   if (remoteInfo) {
     if (isHarvestMode()) {
+      if (!isCellInRange(remoteInfo)) {
+        showToast('Move closer to that crop', 'error');
+        return;
+      }
       Net.stealPlant(remoteInfo.ownerId, remoteInfo.plotId, remoteInfo.row, remoteInfo.col);
     }
     return;
@@ -243,6 +248,10 @@ canvas.addEventListener('click', (event) => {
 
   if (!cellInfo) return;
   const { plotId, row, col } = cellInfo;
+  if (!isCellInRange({ originX: myGarden.originX, originZ: myGarden.originZ, row, col })) {
+    showToast('Move closer to plant or harvest', 'error');
+    return;
+  }
 
   if (selectedGear) {
     Net.useGear(selectedGear, plotId, row, col);
@@ -324,6 +333,21 @@ function updateAimFromEvent(event) {
   player.setAimAngle?.(aimAngle);
 }
 
+function isCellInRange(cellInfo) {
+  if (!player || !cellInfo) return false;
+  const { x, z } = getCellWorldPosition(cellInfo);
+  return player.distanceTo(x, z) <= CELL_INTERACT_RANGE;
+}
+
+function getCellWorldPosition(cellInfo) {
+  const gridSize = cellInfo.gridSize || myGarden?.gridSize || latestState?.gridSize || 3;
+  const offset = cellWorldOffset(cellInfo.row, cellInfo.col, gridSize);
+  return {
+    x: (cellInfo.originX ?? myGarden?.originX ?? 0) + offset.x,
+    z: (cellInfo.originZ ?? myGarden?.originZ ?? 0) + offset.z,
+  };
+}
+
 function spawnBullet(msg) {
   const color = msg.weaponType === 'shotgun' ? 0xffd166 : msg.weaponType === 'minigun' ? 0x9be7ff : 0xfff3b0;
   const mesh = new THREE.Mesh(
@@ -366,7 +390,7 @@ function loop() {
   lastFrameTime = now;
 
   if (player) {
-    player.update(dt, world?.collides);
+    player.update(dt, world?.collides, getCameraYaw());
     const pos = player.getPosition();
     setCameraTarget(pos.x, pos.z);
     updateWorldUI();

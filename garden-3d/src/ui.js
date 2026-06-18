@@ -66,7 +66,7 @@ export function buildHUD() {
     <div id="hotbar"></div>
     <div id="mode-indicator"></div>
     <div id="interact-hint" class="hidden"></div>
-    <div id="hint-bar">WASD move | E interact | H harvest/steal | F equip gun | click fire</div>
+    <div id="hint-bar">WASD move | right/middle drag camera | wheel zoom | E interact | H harvest/steal | F gun</div>
     <div id="weather-effects" class="weather-effect hidden"></div>
     <div id="toast-stack"></div>
   `;

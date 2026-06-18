@@ -195,6 +195,8 @@ const MUTATION_MULTIPLIER = 2; // mutated crops sell for 2x
 const MAX_HEALTH = 100;
 const BOOST_TICK_MS = 2000;
 const PLOT_SPACING = 10;
+const CELL_SPACING = 1.2;
+const CELL_INTERACT_RANGE = 2.25;
 const POSITION_SYNC_MS = 100;
 
 // Make every plant seed at least 2x more expensive than the old economy.
@@ -800,6 +802,7 @@ function handleMessage(player, msg) {
       const plot = player.plots[plotId];
       if (!plot || plot.playerId !== player.id) return sendError(player, 'Invalid plot');
       if (!plot.cells.find(c => c.row === cellRow && c.col === cellCol)) return sendError(player, 'Invalid cell');
+      if (!isCellInInteractRange(player, player, cellRow, cellCol)) return sendError(player, 'Move closer to that crop');
       player.gear[itemType]--;
       player.activeBoosts.push({
         itemType,
@@ -858,6 +861,7 @@ function handleMessage(player, msg) {
       const cell = plot.cells.find(c => c.row === cellRow && c.col === cellCol);
       if (!cell) return sendError(player, 'Invalid cell');
       if (cell.plant) return sendError(player, 'Cell already occupied');
+      if (!isCellInInteractRange(player, player, cellRow, cellCol)) return sendError(player, 'Move closer to plant there');
 
       player.seeds[seedType]--;
       cell.plant = {
@@ -883,6 +887,7 @@ function handleMessage(player, msg) {
       if (plot.playerId !== player.id) return sendError(player, 'Cannot harvest from others\' plots');
       const cell = plot.cells.find(c => c.row === cellRow && c.col === cellCol);
       if (!cell || !cell.plant) return sendError(player, 'Nothing to harvest');
+      if (!isCellInInteractRange(player, player, cellRow, cellCol)) return sendError(player, 'Move closer to harvest that crop');
       const maxStages = SEED_CATALOG[cell.plant.seedType]?.stages ?? 4;
       if (cell.plant.stage < maxStages - 1) return sendError(player, 'Plant not ready yet');
 
@@ -905,6 +910,7 @@ function handleMessage(player, msg) {
       if (!plot) return sendError(player, 'Invalid target plot');
       const cell = plot.cells.find(c => c.row === cellRow && c.col === cellCol);
       if (!cell || !cell.plant) return sendError(player, 'Nothing to steal');
+      if (!isCellInInteractRange(player, owner, cellRow, cellCol)) return sendError(player, 'Move closer to steal that crop');
       const maxStages = SEED_CATALOG[cell.plant.seedType]?.stages ?? 4;
       if (cell.plant.stage < maxStages - 1) return sendError(player, 'That crop is not ready yet');
       const { seedType, quality, mutationName } = collectReadyPlant(cell);
@@ -1109,6 +1115,19 @@ function isAtOwnPlot(player) {
   const plotRadius = Math.max(5.5, gridSize * 0.85 + 2.6);
   return distance(player.position, player.plotOrigin) <= plotRadius
     || distance(player.position, getSpawnPosition(player.plotOrigin)) <= 4;
+}
+
+function isCellInInteractRange(actor, owner, row, col) {
+  const cellPos = getCellWorldPosition(owner, row, col);
+  return distance(actor.position, cellPos) <= CELL_INTERACT_RANGE;
+}
+
+function getCellWorldPosition(owner, row, col) {
+  const gridSize = GRID_SIZES[owner.expansionLevel] || 3;
+  return {
+    x: owner.plotOrigin.x + (col - (gridSize - 1) / 2) * CELL_SPACING,
+    z: owner.plotOrigin.z + (row - (gridSize - 1) / 2) * CELL_SPACING,
+  };
 }
 
 function collectReadyPlant(cell) {
